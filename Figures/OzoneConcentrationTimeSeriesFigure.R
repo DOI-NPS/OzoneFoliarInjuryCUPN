@@ -6,26 +6,17 @@
 
 
 # Load packages -----------------------------------------------------------
-# names of packages to laod 
-packageNames <- c("ggplot2", "lubridate", "stringr", "ggpubr", "dplyr")
+# names of packages to load from CRAN
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
 
-# now, load all packages
-lapply(X = packageNames, FUN = function(x) require(package = x, character.only = TRUE))
-
 # User Inputs -------------------------------------------------------------
 ## Change the arguments below when running this script on a new computer or with a new data file
 
-# The character string stored in the object "folderPath" is the file path for the 
-# folder that contains the ozone data .csv file
-# CHANGE THIS PATH to correspond to the location of the data on your computer. 
-# The figures will also be written out to this location. Make sure to use forward slashes
-folderPath <- "~/Dropbox/Work/CSU_NPS_dataScience/CUPN/OzoneMonitoringFigures/"
-
 # The character string stored in the object "dataName" is the name of the ozone data .csv file
-# CHANGE THIS NAME to correspond to the name of the data file the data on your computer.
+# NOTE: This script assumes that this data file is stored in a folder called "Data", which exists in the same folder that contains the Figures/ folder
 dataName <- "2021MACA_8HrAveOzone.csv"
 
 # the object skipNumber stores an integer that corresponds to the number of rows 
@@ -40,15 +31,20 @@ samplingLocation <- "Mammoth Cave National Park - Houchin Meadow"
 samplingLoc_Short <- "MACA"
 
 # load data ---------------------------------------------------------------
-# set working directory to the folder
-setwd(folderPath)
+# set working directory to the folder this script is saved in (This is the "Figures" folder inside this R project)
+here::i_am("Figures/OzoneConcentrationTimeSeriesFigure.R")
 
 # read in ozone monitoring data 
-ozoneDat <- read.csv(file = dataName,
+ozoneDat <- read.csv(file = paste0(here(),"/Data/",dataName),
                      skip = skipNumber
                      ) 
-# remove 'X' column that contains only NAs (likely a byproduct of data entry in excel)
-ozoneDat$X <- NULL 
+# remove any column that contains only NAs (likely a byproduct of data entry in excel)
+# save names of columns that have only NAs
+badCols <- names(ozoneDat)[which(apply(ozoneDat, MARGIN = 2, 
+      FUN = function(x) 
+        sum(is.na(x))) == nrow(ozoneDat)
+      )]
+ozoneDat[,badCols] <- NULL 
 
 # format the dateTime column as a date time
 # time zone is Central Standard Time
@@ -122,11 +118,12 @@ annotate(geom = "label", x =  as_datetime(paste0(lubridate::year(ozoneDat$DATE_T
 # save figure -------------------------------------------------------------
 # NOTE that the figures will be saved in the same folder as the data file (this location is set in line 21 of this script)
 # save as PDF
-pdf(file = paste0("./ozoneConcentrationFig", samplingLoc_Short, "_",lubridate::year(ozoneDat$DATE_TIME[1]),".pdf"), width = 8, height = 6)
+pdf(file = paste0(here(),"/Figures/ozoneConcentrationFig", samplingLoc_Short, "_",lubridate::year(ozoneDat$DATE_TIME[1]),".pdf"), width = 8, height = 6)
 ozoneFig
 dev.off()
 
 # save as PNG
-png( paste0("./ozoneConcentrationFig", samplingLoc_Short, "_",lubridate::year(ozoneDat$DATE_TIME[1]),".png"), res = 175, width = 1200, height =1000)
+png( paste0(here(), "/Figures/ozoneConcentrationFig", samplingLoc_Short, "_",lubridate::year(ozoneDat$DATE_TIME[1]),".png"), res = 175, width = 1200, height =1000)
 ozoneFig
 dev.off()
+
