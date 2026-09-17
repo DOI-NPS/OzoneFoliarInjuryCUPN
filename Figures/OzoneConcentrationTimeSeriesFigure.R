@@ -1,7 +1,7 @@
 # Figure of Ozone Concentration across time for the Cumberland Piedmont Network
 # written for Mammoth Cave ozone data from 2021
 # Data Store Project Code: 2312827
-# Author: Alice Stears, alice.e.stears@gmail.com; alice.stears@colostate.edu
+# Author: Alice Stears, alice.e.stears@gmail.com; alice.stears@colostate.edu; alice_stears@partner.nps.gov
 # Date: August 2026
 
 
