@@ -7,7 +7,7 @@
 
 # Load packages -----------------------------------------------------------
 # names of packages to load from CRAN
-packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes")
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
@@ -29,6 +29,24 @@ skipNumber <- 9
 samplingLocation <- "Mammoth Cave National Park - Houchin Meadow"
 # abbreviation of the sampling location
 samplingLoc_Short <- "MACA"
+
+# Set the font for the figure ---------------------------------------------
+# If the frutiger fonts are installed on this computer, use those. Otherwise, use the default font
+# find out where fonts are located on this machine, and if there is a Frutiger Light font installed, use that
+
+if ("FrutigerLTStd-Light.otf" %in% list.files(sysfonts::font_paths())) {
+  # is the system DOES have frutiger light installed, use that
+  # tell R to use the showtext package to render fonts in figures
+  showtext_auto()
+  # load the frutiger light font
+  font_add("FrutigerLTStd-Light", paste0(sysfonts::font_paths(),"/FrutigerLTStd-Light.otf"))
+  # save the font name 
+  fontName <- "FrutigerLTStd-Light"
+} else {
+  # if the system does NOT have frutiger light installed
+  fontName <- "sans"
+  }
+
 
 # load data ---------------------------------------------------------------
 # set working directory to the folder this script is saved in (This is the "Figures" folder inside this R project)
@@ -93,14 +111,15 @@ labelMaxY <-ifelse(max(ozoneDat[[ozoneColName]], na.rm = TRUE) > 70,
                breaks = "1 month") +
   scale_y_continuous(limits = ~range(.x, 0), breaks = get_breaks(by = 10, from = 0)) + # make sure the y axis always includes zero
   theme_pubr() + 
-  theme(axis.text.x = element_text(angle = 45,hjust = 1), # rotate x axis labels 
-        axis.title.x = element_text(size = 11), 
+  theme(text = element_text(family = fontName), # make all of the text have the desired font type
+    axis.text.x = element_text(angle = 45,hjust = 1), # rotate x axis labels 
+        axis.title.x = element_text(size = 12), 
         axis.text.y = element_text(margin = margin(0,3,0,0)), # make more room between axis labels and axis line
         axis.title.y = element_text(margin = margin(0,7,0,5),# make more room between axis title and axis line
                                     size = 12# make label text slightly larger
                                     ), 
         plot.subtitle = element_text(size = 14, hjust = 0.5), # make subtitle slightly larger
-        plot.title = element_text(hjust = 0.5)# make plot title and subtitle centered
+        plot.title = element_text(hjust = 0.5),# make plot title and subtitle centered
         ) + 
 annotate(geom = "label", x =  as_datetime(paste0(lubridate::year(ozoneDat$DATE_TIME)[1],"-03-15 07:00:00 CDT")), # CHANGE the dates here and below to move the label and arrow on the x axis if the date range is different
          y = labelMaxY, 
@@ -122,8 +141,8 @@ pdf(file = paste0(here(),"/Figures/ozoneConcentrationFig", samplingLoc_Short, "_
 ozoneFig
 dev.off()
 
-# save as PNG
-png( paste0(here(), "/Figures/ozoneConcentrationFig", samplingLoc_Short, "_",lubridate::year(ozoneDat$DATE_TIME[1]),".png"), res = 175, width = 1200, height =1000)
-ozoneFig
-dev.off()
+# # save as PNG
+# png( paste0(here(), "/Figures/ozoneConcentrationFig", samplingLoc_Short, "_",lubridate::year(ozoneDat$DATE_TIME[1]),".png"), res = 175, width = 1200, height =1000)
+# ozoneFig
+# dev.off()
 
