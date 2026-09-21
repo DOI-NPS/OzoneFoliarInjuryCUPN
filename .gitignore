@@ -4,4 +4,5 @@
 .Ruserdata
 .csv
 
-Data/*
+/Data/*
+!/Data/.gitkeep
