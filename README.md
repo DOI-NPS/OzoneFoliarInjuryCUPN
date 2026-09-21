@@ -1,5 +1,5 @@
 # Ozone Foliar Injury Monitoring at the Cumberland Piedmont Network
-Contains code to perform analysis and generate figures related to ozone foliar injury monitoring at parks in the Cumberland Piedmont Network.
+This repository contains code to perform analysis and generate figures related to ozone foliar injury monitoring at parks in the Cumberland Piedmont Network.
 
 
 ## Notes:
@@ -14,4 +14,4 @@ Contains code to perform analysis and generate figures related to ozone foliar i
 ## Additional Information
 
 ## Contact information
-NPS Inventory and Monitoring Division (IMD) staff with questions about requesting new repositories or migrating existing repositories should contact [Rob Baker](mailto:robert_baker@nps.gov?subject=DGEC%20Repositories).
+For questions about the contents of this repository, reach out to Alice Stears at alice_stears@partner.nps.gov
