@@ -1,9 +1,11 @@
-# Ozone Foliar Injury Monitoring at the CUmberland Piedmont Network
+# Ozone Foliar Injury Monitoring at the Cumberland Piedmont Network
 Contains code to perform analysis and generate figures related to ozone foliar injury monitoring at parks in the Cumberland Piedmont Network.
 
-## Notes:
 
-## IMD Repositories:
+## Notes:
+### To generate a figure showing change in ozone concentration at a point location over a given year, follow these steps: 
+1. 
+
 
 ## Additional Information
 

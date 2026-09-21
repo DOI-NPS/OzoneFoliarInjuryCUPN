@@ -11,6 +11,9 @@ packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here",
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
+ 
+# now, load all packages
+lapply(X = packageNames, FUN = function(x) require(package = x, character.only = TRUE))
 
 # User Inputs -------------------------------------------------------------
 ## Change the arguments below when running this script on a new computer or with a new data file
@@ -53,7 +56,7 @@ if ("FrutigerLTStd-Light.otf" %in% list.files(sysfonts::font_paths())) {
 here::i_am("Figures/OzoneConcentrationTimeSeriesFigure.R")
 
 # read in ozone monitoring data 
-ozoneDat <- read.csv(file = paste0(here(),"/Data/",dataName),
+ozoneDat <- read.csv(file = paste0(here::here(),"/Data/",dataName),
                      skip = skipNumber
                      ) 
 # remove any column that contains only NAs (likely a byproduct of data entry in excel)
