@@ -6,3 +6,6 @@
 
 /Data/*
 !/Data/.gitkeep
+
+/Figures/ozoneConcentration*.pdf
+!/Figures/EXAMPLEFIG_ozoneConcentrationFigMACA_2021.pdf
