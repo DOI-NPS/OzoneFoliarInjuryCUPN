@@ -1,13 +1,15 @@
-Package: IMD_template_repo
-Title: Minimal Required Contents for a DGEC Compliant Repository
+Title: Ozone foliar injury visualizations and analysis 
 Version: 1.0.0
 Authors@R: c(
     person(given="Robert", family="Baker", email="robert_baker@nps.gov",
            role = c("aut", "cre"),
-           comment = c(ORCID = "0000-0001-7591-5035"))
+           comment = c(ORCID = "0000-0001-7591-5035")),
+           person(given = "Alice", family = "Stears", email = "alice_stears@partner.nps.gov", 
+           role = c("aut"), 
+           comment = c(ORCID = "0000-0002-1325-6641"))
     )
-Description: Contains the minimally required files and content for a DGEC compliant repository. This repository acts as a template for new IMD DGEC repositories and can be used by individuals who want to migrate repositories into DGEC to acquire the required files (the files should subsequently be edited to be repository specific).
+Description: Contains code to perform analysis and generate figures related to ozone foliar injury monitoring at parks in the Cumberland Piedmont Network.
 License: CC0 + file LICENSE
 Encoding: UTF-8
-URL: https://github.com/doi-NPS/IMD_template_repo
-BugReports: https://github.com/doi-NPS/IMD_template_repo/issues
+URL: https://github.com/doi-NPS/OzoneFoliarInjuryCUPN
+BugReports: https://github.com/doi-NPS/OzoneFoliarInjuryCUPN/issues

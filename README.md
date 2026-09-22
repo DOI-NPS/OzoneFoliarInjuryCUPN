@@ -1,16 +1,17 @@
-# IMD_template_repo
-This repository has all the files you need to comply with [DGEC Rules of Behavior](https://doimspp.sharepoint.com/sites/ocio-DOI-GitHub-Enterprise/Shared%20Documents/General/Rules%20of%20Behavior/DGEC%20Rules%20of%20Behavior%20%20-%20Write.pdf?web=1). Feel free to copy these files and (after editing for your specific use case) add them to your repository or use this repository as a template when creating a new repsoitory.
+# Ozone Foliar Injury Monitoring at the Cumberland Piedmont Network
+This repository contains code to perform analysis and generate figures related to ozone foliar injury monitoring at parks in the Cumberland Piedmont Network.
+
 
 ## Notes:
-All DGEC repos must have contact information for the repo authors. In this template repo, that information is contained within the DESCRIPTION file. If you do not wish to have a DESCRIPTION file, that is fine but you must include contact information for the authors in the README or elsewhere.
+### To generate a figure showing change in ozone concentration at a point location over a given year, follow these steps: 
+1. Ensure this repository is downloaded on your computer, either by cloning this repository or downloading it manually from GitHub. 
+2. Put the .csv file with the ozone concentration data you wish to plot inside the "Data/" folder in this repository. 
+3. Make sure that the character string in line 23 of the R script "Figures/OzoneConcentrationTimeSeriesFigure.R" reflects the name of the data file you updated in step 2. 
+4. Run the R script "Figures/OzoneConcentrationTimeSeriesFigure.R"
+5. A figure will be generated and stored inside the "Figures/" folder in this repository. This file will be called "ozoneConcnetrationFigXXXX_YEAR.pdf", where XXXX corresponds to the abbreviated park name (defined in line 34 of the R script from step 4), and YEAR corresponds to the year in the ozone dataset. 
 
-Although there are no strict repository naming requirements, you are encouraged to choose short, unique, informative names that are aligned with any coding language or publication repository (e.g. CRAN) specific conventions. For more information, see the [IMD SharePoint on naming repositories](https://doimspp.sharepoint.com/sites/nps-nrss-imdiv/publication/SitePages/DGEC-Requirements.aspx#repository-names).
-
-## IMD Repositories:
-Repositories created by or for the Inventory and Monitoring Division on NPS **must include the following keywords ("topics"): nrss, imd** (and as many other keywords as you like - your region, network, and/or park unit codes are likely candidates). See the IMD SharePoint pages for how to [add keywords](https://doimspp.sharepoint.com/sites/nps-nrss-imdiv/publication/SitePages/DGEC-Requirements.aspx#keywords) to a repository. 
 
 ## Additional Information
-For more information, please reference the [DOI DGEC SharePoint Page](https://doimspp.sharepoint.com/sites/ocio-DOI-GitHub-Enterprise/SitePages/Home.aspx) and the [IMD DGEC Best Practices Page](https://doimspp.sharepoint.com/sites/nps-nrss-imdiv/publication/SitePages/Code-and-Development.aspx).
 
 ## Contact information
-NPS Inventory and Monitoring Division (IMD) staff with questions about requesting new repositories or migrating existing repositories should contact [Rob Baker](mailto:robert_baker@nps.gov?subject=DGEC%20Repositories).
+For questions about the contents of this repository, reach out to Alice Stears at alice_stears@partner.nps.gov
