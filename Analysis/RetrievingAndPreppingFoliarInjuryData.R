@@ -40,12 +40,4 @@ reference_id <- c(2315044)
 
 # get the data store package 
 NPSutils::get_data_package(reference_id = reference_id)
-# now load the data package
-ozoneDatPkg <- NPSutils::load_data_package(reference_id = reference_id, 
-                            directory = paste0(here(), "/Data/"))
-
-
-
-# Map of plot locations ---------------------------------------------------
-
 
