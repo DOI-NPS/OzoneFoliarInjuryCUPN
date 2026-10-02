@@ -7,7 +7,7 @@
 
 # Load packages -----------------------------------------------------------
 # names of packages to load from CRAN
-packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext")
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
@@ -144,8 +144,8 @@ pdf(file = paste0(here(),"/Figures/ozoneConcentrationFig", samplingLoc_Short, "_
 ozoneFig
 dev.off()
 
-# # save as PNG
-# png( paste0(here(), "/Figures/ozoneConcentrationFig", samplingLoc_Short, "_",lubridate::year(ozoneDat$DATE_TIME[1]),".png"), res = 175, width = 1200, height =1000)
-# ozoneFig
-# dev.off()
+# save as PNG
+png( paste0(here(), "/Figures/ozoneConcentrationFig", samplingLoc_Short, "_",lubridate::year(ozoneDat$DATE_TIME[1]),".png"), res = 175, width = 1200, height =1000)
+ozoneFig
+dev.off()
 
