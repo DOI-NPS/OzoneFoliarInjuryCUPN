@@ -1,0 +1,251 @@
+---
+title: "Ozone foliar injury across time at NPS Units in the Cumberland Piedmont Inventory and Monitoring Network"
+date: today
+author: Alice Stears, alice_stears@partner.nps.gov
+format:
+  html:
+    toc: true
+    code-fold: true
+execute: 
+  echo: false
+  warning: false
+---
+
+All NPS units in the Cumberland Piedmont Inventory and Monitoring Network (CUPN) take part in a monitoring protocol to track the presence and extent of ozone foliar injury on target plant species. Resource Briefs that summarize findings at each NPS unit in each monitoring year can be found on NPS DataStore under project reference code [2312827](https://irma.nps.gov/DataStore/Reference/Profile/2302031). Here, we show changes in the presence and rate of both suspected and confirmed ozone foliar injury at monitored sites across the monitoring period.
+
+```{r, include=FALSE}
+## Load packages
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts")
+
+# get names of packages that still need to be installed and install them 
+install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
+ 
+# now, load all packages
+lapply(X = packageNames, FUN = function(x) require(package = x, character.only = TRUE))
+
+## set global options
+ggplot2::set_theme(theme_classic())
+
+## load data
+datAll <- read.csv("../Data/2315044/CUPN_OzoneFoliarInjury_SpeciesAssesment.csv")
+datAll <- datAll |> 
+  mutate(startDate = as_date(startDate)) |> 
+  mutate(year = year(startDate))
+```
+
+
+## Presence of suspected ozone foliar injury across all parks across time...
+### ... across all species
+```{r}
+# trim the data to only have observations from 'standard plots' (not QA/QC plots) 
+datAll_std <- datAll |> 
+  filter(eventType == "ozone standard")
+
+# calculate damage presence/absence
+datAll_std_allParks_allSpp_PA <-datAll_std |> 
+  mutate(damageAmountCode = replace(x = damageAmountCode,list = c(damageAmountCode != 0), values = 1)) |>
+  mutate(year = lubridate::year(lubridate::as_date(as.character(year), format = "%Y")))
+  #group_by(year, damageAmountCode) |> 
+  #summarize(n = length(year)) 
+
+# plot of number of individual plants w/ and without ozone by year across all park units
+datAll_std_allParks_allSpp_PA |> 
+  ggplot() + 
+  geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode)), width = 0.9) + 
+  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) + 
+  theme(palette.fill.discrete = c("#40B0A6", "#E1BE6A")) + 
+  scale_fill_discrete(labels = c("No", "Yes")) + 
+  labs(x = "Year", y = "Number of Individual Plants", 
+        title = "Number of individual plants with and without suspected ozone \nfoliar injury, across all park units")+ 
+    xlim(c(min(datAll$year), max(datAll$year)))
+
+
+# plot of proportion of individual plants w/ and without ozone by year across all park units
+datAll_std_allParks_allSpp_PA |> 
+  #group_by(year, damageAmountCode) |> 
+  #summarize(n = length(year))
+  ggplot() + 
+  geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode)), position = "fill", width = 0.9) + 
+  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) + 
+  theme(palette.fill.discrete = c("#40B0A6", "#E1BE6A")) + 
+  scale_fill_discrete(labels = c("No", "Yes")) + 
+  labs(x = "Year", y = "Proportion of sampled plants", 
+        title = "Proportion of individual plants with and without suspected ozone \nfoliar injury, across all park units")+ 
+    xlim(c(min(datAll$year), max(datAll$year)))
+```
+
+### ... by species
+```{r}
+#| fig-height: 13
+# plot of number of individual plants w/ and without ozone by year across all park units
+datAll_std_allParks_allSpp_PA |> 
+  ggplot() + 
+  facet_wrap(~scientificName, scales = "free_y", ncol = 3, axes = "all_x") +
+  geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode)), width = 0.9) + 
+  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) + 
+  theme(palette.fill.discrete = c("#40B0A6", "#E1BE6A"),
+        strip.text = element_text(face = "italic")) + 
+  scale_fill_discrete(labels = c("No", "Yes")) + 
+  labs(x = "Year", y = "Number of Individual Plants", 
+        title = "Number of individual plants with and without suspected ozone \nfoliar injury, across all park units")+ 
+    xlim(c(min(datAll$year), max(datAll$year)))
+
+
+# plot of proportion of individual plants w/ and without ozone by year across all park units
+datAll_std_allParks_allSpp_PA |> 
+  #group_by(year, damageAmountCode) |> 
+  #summarize(n = length(year))
+  ggplot() + 
+  facet_wrap(~scientificName, scales = "free_y", ncol = 3, axes = "all_x") +
+  geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode)), position = "fill", width = 0.9) + 
+  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) + 
+  theme(palette.fill.discrete = c("#40B0A6", "#E1BE6A"),
+        strip.text = element_text(face = "italic")) + 
+  scale_fill_discrete(labels = c("No", "Yes")) + 
+  labs(x = "Year", y = "Proportion of sampled plants", 
+        title = "Proportion of individual plants with and without suspected ozone \nfoliar injury, across all park units")+ 
+    xlim(c(min(datAll$year), max(datAll$year)))
+```
+----------------
+
+## Presence of suspected ozone foliar injury by park unit across time...
+
+### ... across all species
+```{r}
+#| fig-height: 10
+#| fig-width: 8
+# plot of number of individual plants w/ and without ozone by year across all park units
+datAll_std_allParks_allSpp_PA |> 
+  ggplot() + 
+  facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
+  geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode)), width = 0.9) + 
+  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) + 
+  theme(palette.fill.discrete = c("#40B0A6", "#E1BE6A")) + 
+  scale_fill_discrete(labels = c("No", "Yes")) + 
+  labs(x = "Year", y = "Number of Individual Plants", 
+        title = "Number of individual plants with and without suspected ozone \nfoliar injury, by park unit")+ 
+    xlim(c(min(datAll$year), max(datAll$year)))
+
+
+# plot of proportion of individual plants w/ and without ozone by year across all park units
+datAll_std_allParks_allSpp_PA |> 
+  ggplot() + 
+  facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
+  geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode)), position = "fill", width = 0.9) + 
+  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) + 
+  theme(palette.fill.discrete = c("#40B0A6", "#E1BE6A")) + 
+  scale_fill_discrete(labels = c("No", "Yes")) + 
+  labs(x = "Year", y = "Proportion of sampled plants", 
+        title = "Proportion of individual plants with and without suspected ozone \nfoliar injury, by park unit")+ 
+    xlim(c(min(datAll$year), max(datAll$year)))
+```
+
+### ... by species
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+
+parkNames <- unique(datAll_std_allParks_allSpp_PA$unitName)  
+suspectedOzoneFigsByParkBySpp <- vector(length = length(parkNames), mode = "list")
+for (i in seq_along(parkNames)) { 
+  suspectedOzoneFigsByParkBySpp[[i]] <- datAll_std_allParks_allSpp_PA |> 
+    filter(unitName == parkNames[i]) |> 
+  ggplot() + 
+  facet_wrap(~scientificName, scales = "free_y", ncol = 3, axes = "all_x") +
+  geom_bar(aes(x = year, fill = as.factor(damageAmountCode)), width = 0.9) + 
+  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) + 
+  theme(palette.fill.discrete = c("#40B0A6", "#E1BE6A"),
+        strip.text = element_text(face = "italic")) + 
+  scale_fill_discrete(labels = c("No", "Yes")) + 
+  labs(x = "Year", y = "Number of Individual Plants", 
+        title = "Number of individual plants with and without suspected ozone \nfoliar injury",
+       subtitle = parkNames[i]) + 
+    xlim(c(min(datAll$year), max(datAll$year)))
+
+}
+suspectedOzoneFigsByParkBySpp[[1]]
+suspectedOzoneFigsByParkBySpp[[2]]
+suspectedOzoneFigsByParkBySpp[[3]]
+suspectedOzoneFigsByParkBySpp[[4]]
+suspectedOzoneFigsByParkBySpp[[5]]
+suspectedOzoneFigsByParkBySpp[[6]]
+suspectedOzoneFigsByParkBySpp[[7]]
+suspectedOzoneFigsByParkBySpp[[8]]
+suspectedOzoneFigsByParkBySpp[[9]]
+suspectedOzoneFigsByParkBySpp[[10]]
+suspectedOzoneFigsByParkBySpp[[11]]
+suspectedOzoneFigsByParkBySpp[[12]]
+suspectedOzoneFigsByParkBySpp[[13]]
+suspectedOzoneFigsByParkBySpp[[14]]
+
+suspectedOzoneFigsByParkBySpp_2 <- vector(length = length(parkNames), mode = "list")
+for (i in seq_along(parkNames)) { 
+  suspectedOzoneFigsByParkBySpp_2[[i]] <- datAll_std_allParks_allSpp_PA |> 
+    filter(unitName == parkNames[i]) |> 
+  ggplot() + 
+  facet_wrap(~scientificName, scales = "free_y", ncol = 3, axes = "all_x") +
+  geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode)), position = "fill", width = 0.9) +
+  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) +
+  theme(palette.fill.discrete = c("#40B0A6", "#E1BE6A"),
+        strip.text = element_text(face = "italic")) +
+  scale_fill_discrete(labels = c("No", "Yes")) +
+  labs(x = "Year", y = "Proportion of sampled plants",
+        title = "Proportion of individual plants with and without suspected ozone \nfoliar injury",
+       subtitle = parkNames[i]) + 
+    xlim(c(min(datAll$year), max(datAll$year)))
+
+}
+suspectedOzoneFigsByParkBySpp_2[[1]]
+suspectedOzoneFigsByParkBySpp_2[[2]]
+suspectedOzoneFigsByParkBySpp_2[[3]]
+suspectedOzoneFigsByParkBySpp_2[[4]]
+suspectedOzoneFigsByParkBySpp_2[[5]]
+suspectedOzoneFigsByParkBySpp_2[[6]]
+suspectedOzoneFigsByParkBySpp_2[[7]]
+suspectedOzoneFigsByParkBySpp_2[[8]]
+suspectedOzoneFigsByParkBySpp_2[[9]]
+suspectedOzoneFigsByParkBySpp_2[[10]]
+suspectedOzoneFigsByParkBySpp_2[[11]]
+suspectedOzoneFigsByParkBySpp_2[[12]]
+suspectedOzoneFigsByParkBySpp_2[[13]]
+suspectedOzoneFigsByParkBySpp_2[[14]]
+```
+
+
+## rate and average severity of suspected ozone foliar injury across all parks across time
+
+### by species
+
+### across all species
+
+## rate and average severity of suspected ozone foliar injury by park across time
+
+### by species
+
+### across all species
+
+------------------------------------------------------------------------
+
+## presence of confirmed ozone foliar injury across all parks across time
+
+### by species
+
+### across all species
+
+## presence of confirmed ozone foliar injury by park across time
+
+### by species
+
+### across all species
+
+## rate and average severity of confirmed ozone foliar injury across all parks across time
+
+### by species
+
+### across all species
+
+## rate and average severity of confirmed ozone foliar injury by park across time
+
+### by species
+
+### across all species
