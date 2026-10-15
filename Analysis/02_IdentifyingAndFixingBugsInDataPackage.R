@@ -111,3 +111,21 @@ if(!"cleanedDataPkgFiles" %in% list.files(here("Data"))) {
   dir.create(here("Data/cleanedDataPkgFiles"))
 }
 write.csv(eventDat, file = here::here("Data/cleanedDataPkgFiles/pkg_2315044.CUPN_OzoneFoliarInjury_Event_CLEANED.csv"))
+
+
+
+# Voucher specimen inof ---------------------------------------------------
+
+voucherDat <- read.csv(file = here::here("Data/2315044/CUPN_OzoneFoliarInjury_SpeciesLeafCollected.csv"))
+
+# column name should be "siteName" rather than "stieName"
+voucherDat <- voucherDat |> 
+  rename("siteName" = "stieName")
+
+# save 
+write.csv(voucherDat, file = here::here("Data/cleanedDataPkgFiles/CUPN_OzoneFoliarInjury_SpeciesLeafCollected_CLEANED.csv"))
+
+
+# Metadata file -----------------------------------------------------------
+
+# The metadata file should clarify whether the information in a given field is coming from the filed crew or from the expert who evaluates the voucher specimen (for example, Johnathan thinks that information in the field "voucherPercentInjuryOzone" comes from the field crew, while information in the "ozoneInjuryReview" column comes from the expert who is reviewing the voucher specimens)
