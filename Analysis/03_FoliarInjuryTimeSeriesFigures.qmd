@@ -16,7 +16,7 @@ All NPS units in the Cumberland Piedmont Inventory and Monitoring Network (CUPN)
 
 ```{r, include=FALSE}
 ## Load packages
-packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa")
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
@@ -939,6 +939,10 @@ confirmedOzoneRankings_byPark[[14]]
 # Trend analysis
 
 Inspired in part by code from the forestTrends R package by Kate Miller, accessed 15 October, 2026
+```{r, echo = FALSE}
+# read in functions
+source(file  = "../Functions/AnalysisFunctions.R")
+```
 
 ## attempt # 1: 
 - fit a model across all data, using binary occurrence of confirmed foliar injury 
@@ -1090,6 +1094,95 @@ testDispersion(recalculateResiduals(mod2_resids, group = ~scientificName), plot 
 ```
 The results appear slightly better. There is no longer a significant KS test. The residuals still have significant quantile deviations (as seen in the right hand figure), which isn't ideal. However, the model does not appear to be over-dispersed. 
 
+
+### Now, look at the coefficients resulting from this model as well as their confidence intervals
+```{r}
+mod_df <- broom.mixed::tidy(mod2) |> 
+  dplyr::filter(effect == 'fixed') |>
+      dplyr::select(term, estimate) |> data.frame()
+
+new_df <- data.frame("year" = sort(unique(mod2$frame$year)))
+pred_df <- data.frame(term = paste0(substr("year", 1, 1), new_df[,"year"], "_response"),
+                          estimate = stats::predict(mod2, newdata = new_df,
+                                                    type = 'response', re.form = NA))
+
+# plot the coefficients 
+ broom.mixed::tidy(mod2, conf.int = TRUE)  |> 
+   transform(term=sprintf("%s.%s", component, term)) |> 
+   mutate(model = "mod2") |> 
+  dotwhisker::dwplot() + geom_vline(xintercept = 0, lty = 2) + xlim(-5,5)
+```
+
+### Make bootstrap confidence intervals (like in forestTrends R package) 
+```{r}
+ plots <- data.frame(unique(datAll_std[,"unitName"]))
+species <- data.frame(unique(datAll_std[,"scientificName"]))
+chatty <- T
+num_reps <-  100
+
+  real_mod <- (case_boot_sample_MINE(datAll_std, x = "year", y = "confirmedOzoneInjury", ID = "unitName", sample = F, sample_num = 1,
+                                                group = unitName,
+                                                random_type = "custom", random_formula = "(1|unitName) + (1|scientificName)",
+                                                random_cols = "scientificName", 
+                                                model_type = 'glmmTMB') |>
+                               dplyr::select(-boot_num))
+  try(real_mod <-  real_mod |> dplyr::select(-isSingular))
+
+
+    boot_mod <-
+      suppressWarnings(purrr::map(seq_len(num_reps),
+                                     ~case_boot_sample_MINE(datAll_std, x = "year", y = "confirmedOzoneInjury", ID = "unitName", 
+                                                       sample = T, sample_num = .x,
+                                                       group = unitName,
+                                                random_type = "custom", random_formula = "(1|unitName) + (1|scientificName)",
+                                                random_cols = "scientificName", 
+                                                model_type = 'glmmTMB'), .progress = chatty) |>
+                       purrr::list_rbind() |>
+      tidyr::pivot_wider(names_from = term, values_from = estimate)) |>  data.frame()
+
+
+    boot_CIs <- data.frame(t(apply(boot_mod |> dplyr::select(-boot_num), 2,
+                                   quantile, probs = c(0.025, 0.975), na.rm = T)))#,
+                           #num_boots = sum((ifelse(is.na(x), 0, 1))))
+                           #num_boots_sing = sum(boot_mod$isSingular, na.rm = T))
+
+    # num_boot_sing <- unique(boot_CIs$num_boots_sing)
+    # num_boot_fail <- num_reps - max(boot_CIs$num_boots)
+    # 
+    # if(num_boot_fail == 0 & num_boot_sing > 0){
+    #   warning(paste0("Singular fits occurred in ", num_boot_sing, " bootstrapped samples, but all models returned fits."))}
+    # 
+    # if(num_boot_fail > 0 & num_boot_sing > 0){
+    #   warning(paste0("Singular fits occurred in ", num_boot_sing, " bootstrapped samples, and ", num_boot_fail,
+    #                " bootstrapped samples failed to return a model fit."))}
+    # 
+    # if(num_boot_fail > 0 & num_boot_sing == 0){
+    #   warning(paste0(num_boot_fail, " bootstrapped samples failed to return a model fit."))}
+
+    boot_CIs$term <- rownames(boot_CIs)
+    boot_CIs <- boot_CIs #|>  dplyr::select(-num_boots_sing)
+
+    colnames(boot_CIs) <- c("lower95", "upper95", #"num_boots", 
+                            "term")
+
+ ## CIs for estimates and prediction intervals for response (across all) sites and species
+```
+
+```{r}
+modelPreds <- real_mod |> 
+  slice(3:nrow(real_mod)) |> 
+  rename(confirmedOzoneInjury =estimate) |> 
+  mutate(year = as.integer(str_extract(term, pattern = "[0-9]+"))) |> 
+  left_join(boot_CIs |> slice(3:nrow(boot_CIs)))
+ggplot() + 
+  #geom_point(data = datAll_std, aes(x = year, y = jitter(confirmedOzoneInjury), col = unitName)) + 
+  geom_ribbon(data = modelPreds, aes(x = year, ymin = lower95, ymax = upper95)) +
+  geom_point(data = modelPreds, aes(x = year, y = confirmedOzoneInjury)) + 
+  #geom_line(data = modelPreds, aes(x = year, y = ((1)/(1 + exp(493.4503 + -0.2484 * year) ))))
+  
+```
+
+### Now, generate prediction intervals around the predictions of the model 
 
 
 Potential challenges: 

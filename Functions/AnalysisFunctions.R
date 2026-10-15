@@ -1,103 +1,175 @@
-#' trend_lmer: Fit random effects model with lmer and return results of interest -- from forestTrends R package by Kate Miller, accessed 15 October, 2026
-#'
-#' @description Fit random effects model in lmer, and return fixed effects intercept and slope and predicted responses for each
-#' time step (i.e. cycle or year) represented in the data. This is mostly an internal function run within case_boot_lmer(),
-#' but can be used as a stand alone function.
-#'
-#' @param df Data frame containing an ID column that identifies each sample unit (e.g., Plot_Name), a column containing a time
-#' variable, and at least one column with a response variable.
-#' @param x Quoted time variable for trend analysis. Default is "cycle", but can also model by year. Must be numeric.
-#' @param y Quoted response variable in the data frame. Must be numeric
-#' @param ID Quoted name of column containing site or plot IDs. Default is "Plot_Name", and assumes the first 4 characters
-#' are a park code.
-#' @param random_type Specify "intercept", "slope", or "custom". The intercept option (default) will fit a random intercept model
-#' with (1|ID) as random component. The slope option will fit a random slope model with (1 + x|ID) as the random component.
-#' If "custom" is used, must also specify random_formula.
-#' @param random_formula If random_type = "custom", specify the random effects formula for the model in quotes. Otherwise leave blank.
-#' @param optimizer If blank, will use lme4 default optimizer. Otherwise will add a lmerControl to the lmer() function call. This
-#' is helpful where model convergence is an issue. A common optimizer is 'bobyqa'. You can determine which optimizer to use by running
-#' lme4::fitAll(mod_name). Currently only set up for 'bobyqa' and 'Nelder_Mead'.
-#'
-#' @importFrom lme4 lmer lmerControl
-#' @importFrom broom.mixed tidy
-#' @importFrom dplyr filter select
-#' @importFrom prediction find_data
-#'
-#' @examples
-#' \dontrun{
-#'
-#' park = rep(c("APRK", "BPRK", "CPRK"), each = 30)
-#' plot_name = paste(park, sprintf("%02d", rep(c(1:10), each = 3)), sep = "-")
-#' cycle = rep(1:3, times = 30)
-#' resp = runif(90, 0, 10)
-#'
-#' test_df <- data.frame(park, plot_name, cycle, resp)
-#' test_df$group = ifelse(as.numeric(substr(test_df$plot_name, 5, 6)) %% 2, "GRP.1", "GRP.2")
-#'
-#' # random slope model
-#' mod <- trend_lmer(test_df, x = "cycle", y = "resp", ID = "plot_name", random_type = "slope")
-#'
-#' # custom random effects model for group = GRP.2 with plot nested within park
-#'
-#' mod2 <- trend_lmer(test_df |> filter(group == "GRP.2"), x = "cycle", y = "resp", ID = "plot_name",
-#'   random_type = "custom", random_formula = "(1|park/plot_name)")
-#'
-#'
+#' #' trend_lmer: Fit random effects model with lmer and return results of interest -- from forestTrends R package by Kate Miller, accessed 15 October, 2026
+#' #'
+#' #' @description Fit random effects model in lmer, and return fixed effects intercept and slope and predicted responses for each
+#' #' time step (i.e. cycle or year) represented in the data. This is mostly an internal function run within case_boot_lmer(),
+#' #' but can be used as a stand alone function.
+#' #'
+#' #' @param df Data frame containing an ID column that identifies each sample unit (e.g., Plot_Name), a column containing a time
+#' #' variable, and at least one column with a response variable.
+#' #' @param x Quoted time variable for trend analysis. Default is "cycle", but can also model by year. Must be numeric.
+#' #' @param y Quoted response variable in the data frame. Must be numeric
+#' #' @param ID Quoted name of column containing site or plot IDs. Default is "Plot_Name", and assumes the first 4 characters
+#' #' are a park code.
+#' #' @param random_type Specify "intercept", "slope", or "custom". The intercept option (default) will fit a random intercept model
+#' #' with (1|ID) as random component. The slope option will fit a random slope model with (1 + x|ID) as the random component.
+#' #' If "custom" is used, must also specify random_formula.
+#' #' @param random_formula If random_type = "custom", specify the random effects formula for the model in quotes. Otherwise leave blank.
+#' #' @param optimizer If blank, will use lme4 default optimizer. Otherwise will add a lmerControl to the lmer() function call. This
+#' #' is helpful where model convergence is an issue. A common optimizer is 'bobyqa'. You can determine which optimizer to use by running
+#' #' lme4::fitAll(mod_name). Currently only set up for 'bobyqa' and 'Nelder_Mead'.
+#' #'
+#' #' @importFrom lme4 lmer lmerControl
+#' #' @importFrom broom.mixed tidy
+#' #' @importFrom dplyr filter select
+#' #' @importFrom prediction find_data
+#' #'
+#' #' @examples
+#' #' \dontrun{
+#' #'
+#' #' park = rep(c("APRK", "BPRK", "CPRK"), each = 30)
+#' #' plot_name = paste(park, sprintf("%02d", rep(c(1:10), each = 3)), sep = "-")
+#' #' cycle = rep(1:3, times = 30)
+#' #' resp = runif(90, 0, 10)
+#' #'
+#' #' test_df <- data.frame(park, plot_name, cycle, resp)
+#' #' test_df$group = ifelse(as.numeric(substr(test_df$plot_name, 5, 6)) %% 2, "GRP.1", "GRP.2")
+#' #'
+#' #' # random slope model
+#' #' mod <- trend_lmer(test_df, x = "cycle", y = "resp", ID = "plot_name", random_type = "slope")
+#' #'
+#' #' # custom random effects model for group = GRP.2 with plot nested within park
+#' #'
+#' #' mod2 <- trend_lmer(test_df |> filter(group == "GRP.2"), x = "cycle", y = "resp", ID = "plot_name",
+#' #'   random_type = "custom", random_formula = "(1|park/plot_name)")
+#' #'
+#' #'
+#' #' }
+#' #'
+#' #' @export
+#' 
+#' trend_lmer <- function(df, x = "cycle", y, ID = "Plot_Name",
+#'                        random_type = c("intercept", "slope", "custom"),
+#'                        random_formula = NA,
+#'                        optimizer = NA){
+#'   
+#'   if(is.null(df)){stop("Must specify df to run function")}
+#'   if(is.null(x)){stop("Must specify x variable to run function")}
+#'   if(is.null(y)){stop("Must specify y variable to run function")}
+#'   if(is.null(ID)){stop("Must specify ID variable to run function")}
+#'   random_type <- match.arg(random_type)
+#'   if(random_type == "custom" & is.na(random_formula)){stop("Must specify random formula of random_type = 'custom'")}
+#'   stopifnot(c(x, y, ID) %in% names(df))
+#'   if(!is.na(optimizer)){stopifnot(optimizer %in% c("bobyqa", "Nelder_Mead"))}
+#'   # set up model
+#'   mod_df <- data.frame(term = c("Intercept", "Slope"), estimate = NA_real_)
+#'   pred_df <- data.frame(term = paste0(substr(x, 1, 1), unique(df[,x]), "_response"),
+#'                         estimate = NA_real_)
+#'   
+#'   tryCatch(
+#'     {trend_form <-
+#'       switch(random_type,
+#'              'intercept' =  stats::as.formula(paste0(y, "~ ", x, "+ (1|", ID,")")),
+#'              'slope' = stats::as.formula(paste0(y, "~ ", x, " + (1 + ", x, "|", ID, ")")),
+#'              'custom' = stats::as.formula(paste0(y, "~ ", x, " + ", random_formula)))
+#'     mod <-
+#'       if(is.na(optimizer)){
+#'         #suppressMessages(
+#'         lme4::lmer(trend_form, data = df)
+#'         # )
+#'       } else {#suppressMessages(
+#'         lme4::lmer(trend_form, data = df, control = lmerControl(optimizer = optimizer))#)
+#'       }
+#'     # fit model and clean up output
+#'     mod_df <- broom.mixed::tidy(mod) |> dplyr::filter(effect == 'fixed') |>
+#'       dplyr::select(term, estimate) |> data.frame()
+#'     mod_df$term[mod_df$term == "(Intercept)"] <- "Intercept"
+#'     mod_df$term[mod_df$term == x] <- "Slope"
+#'     # get predicted mean response for each cycle in the dataset
+#'     # first have to create dataset of cycles
+#'     new_df <- data.frame(x = sort(unique(prediction::find_data(mod)[, x])))
+#'     names(new_df) <- c(x)
+#'     pred_df <- data.frame(term = paste0(substr(x, 1, 1), new_df[,x], "_response"),
+#'                           estimate = stats::predict(mod, newdata = new_df,
+#'                                                     type = 'response', re.form = NA))},
+#'     
+#'     error = function(e){warning("Model failed to fit, returning empty data.frame")}, #returns empty mod_df
+#'     warning = function(w){warning("Model failed to fit, returning empty data.frame")} #returns empty mod_df
+#'   )
+#'   
+#'   output <- rbind(mod_df, pred_df) |>
+#'     dplyr::mutate(isSingular = ifelse(is.na(estimate), NA_real_, as.numeric(lme4::isSingular(mod))))
+#'   
+#'   return(output)
 #' }
-#'
-#' @export
 
-trend_lmer <- function(df, x = "cycle", y, ID = "Plot_Name",
-                       random_type = c("intercept", "slope", "custom"),
-                       random_formula = NA,
-                       optimizer = NA){
+
+### function case_boot_sample_MINE
+
+case_boot_sample_MINE <- function(df, 
+                                  x,
+                                  y,
+                                  ID,
+                                  sample = F, 
+                                  sample_num = 1,
+                                  group = ID,
+                                  random_type = "custom", 
+                                  random_formula,
+                                  random_cols,
+                                  model_type = 'glmmTMB', 
+                                  chatty = F) {
+  plots <- data.frame(ID = unique(df[,ID]))
+  colnames(plots) <- "ID" # bug handling for purrr::map
+  n <- nrow(plots)
   
-  if(is.null(df)){stop("Must specify df to run function")}
-  if(is.null(x)){stop("Must specify x variable to run function")}
-  if(is.null(y)){stop("Must specify y variable to run function")}
-  if(is.null(ID)){stop("Must specify ID variable to run function")}
-  random_type <- match.arg(random_type)
-  if(random_type == "custom" & is.na(random_formula)){stop("Must specify random formula of random_type = 'custom'")}
-  stopifnot(c(x, y, ID) %in% names(df))
-  if(!is.na(optimizer)){stopifnot(optimizer %in% c("bobyqa", "Nelder_Mead"))}
-  # set up model
-  mod_df <- data.frame(term = c("Intercept", "Slope"), estimate = NA_real_)
-  pred_df <- data.frame(term = paste0(substr(x, 1, 1), unique(df[,x]), "_response"),
-                        estimate = NA_real_)
+  samp <- if(sample == TRUE){
+    data.frame(ID = sample(plots$ID, n, replace = TRUE))
+  } else {data.frame(plots)} |>
+    dplyr::arrange(ID)
   
-  tryCatch(
-    {trend_form <-
-      switch(random_type,
-             'intercept' =  stats::as.formula(paste0(y, "~ ", x, "+ (1|", ID,")")),
-             'slope' = stats::as.formula(paste0(y, "~ ", x, " + (1 + ", x, "|", ID, ")")),
-             'custom' = stats::as.formula(paste0(y, "~ ", x, " + ", random_formula)))
-    mod <-
-      if(is.na(optimizer)){
-        #suppressMessages(
-        lme4::lmer(trend_form, data = df)
-        # )
-      } else {#suppressMessages(
-        lme4::lmer(trend_form, data = df, control = lmerControl(optimizer = optimizer))#)
-      }
-    # fit model and clean up output
-    mod_df <- broom.mixed::tidy(mod) |> dplyr::filter(effect == 'fixed') |>
-      dplyr::select(term, estimate) |> data.frame()
-    mod_df$term[mod_df$term == "(Intercept)"] <- "Intercept"
-    mod_df$term[mod_df$term == x] <- "Slope"
-    # get predicted mean response for each cycle in the dataset
-    # first have to create dataset of cycles
-    new_df <- data.frame(x = sort(unique(prediction::find_data(mod)[, x])))
-    names(new_df) <- c(x)
-    pred_df <- data.frame(term = paste0(substr(x, 1, 1), new_df[,x], "_response"),
-                          estimate = stats::predict(mod, newdata = new_df,
-                                                    type = 'response', re.form = NA))},
-    
-    error = function(e){warning("Model failed to fit, returning empty data.frame")}, #returns empty mod_df
-    warning = function(w){warning("Model failed to fit, returning empty data.frame")} #returns empty mod_df
-  )
+  # Set up unique naming column, so plots selected more than once have a unique ID.
+  samp$case <- as.factor(stringr::str_pad(rownames(samp), nchar(n), side ="left", pad = 0))
   
-  output <- rbind(mod_df, pred_df) |>
-    dplyr::mutate(isSingular = ifelse(is.na(estimate), NA_real_, as.numeric(lme4::isSingular(mod))))
+  # Make sure custom random effects are included
+  cols <- if(!is.na(random_cols)){c(ID, x, y, random_cols)} else {c(ID, x, y)}
   
-  return(output)
+  df_samp <- dplyr::left_join(samp, df[,cols], by = c("ID" = ID)) |>
+    dplyr::arrange(case, x)
+  
+  # For custom formulas, have to replace smallest unit (e.g. Plot_Name) in formula
+  # with case in the random_formula argument
+  
+  rand_form <- ifelse(random_type == "custom", gsub(ID, "case", random_formula), NA)
+  
+  mod <-
+    if(model_type == "glmmTMB"){
+      mod <- suppressMessages(
+        glmmTMB(data = df_samp, 
+                formula = stats::as.formula(paste0(y, "~", x, "+", rand_form)), 
+                family = binomial(link = "logit")))
+      
+      mod_df <- broom.mixed::tidy(mod) |> dplyr::filter(effect == 'fixed') |>
+        dplyr::select(term, estimate) |> data.frame()
+      mod_df$term[mod_df$term == "(Intercept)"] <- "Intercept"
+      mod_df$term[mod_df$term == x] <- "Slope"
+      # get predicted mean response for each cycle in the dataset
+      # first have to create dataset of cycles
+      new_df <- data.frame(x = sort(unique(mod$frame[, x])))
+      names(new_df) <- c(x)
+      pred_df <- data.frame(term = paste0(substr(x, 1, 1), new_df[,x], "_response"),
+                            estimate = stats::predict(mod, newdata = new_df,
+                                                      type = 'response', re.form = NA))
+      
+      rbind(mod_df, pred_df) |> 
+        dplyr::mutate(boot_num = ifelse(exists("sample_num"), sample_num, 1))
+    }
+  
+  #chatty <- ifelse(exists("chatty"), chatty, FALSE)
+  sample_num <- ifelse(exists("sample_num"), sample_num, 1)
+  
+  #if(chatty == TRUE & (sample_num %% 10) == 0){cat(".")} #prints tick every 10 reps
+  
+  return(mod)
 }
+  
+  
+
