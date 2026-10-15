@@ -16,7 +16,7 @@ All NPS units in the Cumberland Piedmont Inventory and Monitoring Network (CUPN)
 
 ```{r, include=FALSE}
 ## Load packages
-packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts")
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
@@ -93,7 +93,7 @@ datAll_std |>
   theme(palette.fill.discrete = c("#332288", "#DDCC77", "#44AA99")) + 
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) + 
   labs(x = "Year", y = "Proportion of sampled plants", 
-        title = "Proportion of individual plants with and without suspected ozone \nfoliar injury, across all park units")+ 
+        title = "Rate of suspected ozone \nfoliar injury, across all park units")+ 
     xlim(c(min(datAll$year), max(datAll$year)))
 ```
 :::
@@ -129,7 +129,7 @@ datAll_std |>
         strip.text = element_text(face = "italic")) + 
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Proportion of sampled plants", 
-        title = "Proportion of individual plants with and without suspected ozone \nfoliar injury by species, across all park units")+ 
+        title = "Rate of suspected ozone \nfoliar injury by species, across all park units")+ 
     xlim(c(min(datAll$year), max(datAll$year)))
 ```
 :::
@@ -165,7 +165,7 @@ datAll_std |>
   theme(palette.fill.discrete = c("#332288", "#DDCC77", "#44AA99")) +
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Proportion of sampled plants",
-        title = "Proportion of individual plants with and without suspected ozone \nfoliar injury, by park unit")+
+        title = "Rate of suspected ozone \nfoliar injury, by park unit")+
     xlim(c(min(datAll$year), max(datAll$year)))
 ```
 :::
@@ -222,7 +222,7 @@ for (i in seq_along(parkNames)) {
         strip.text = element_text(face = "italic")) +
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Proportion of sampled plants",
-        title = "Proportion of individual plants with and without suspected ozone \nfoliar injury by species",
+        title = "Rate of suspected ozone \nfoliar injury by species",
        subtitle = parkNames[i]) +
     xlim(c(min(datAll$year), max(datAll$year)))
 
@@ -489,7 +489,7 @@ datAll_std |>
   theme(palette.fill.discrete = c("#332288", "#DDCC77", "#44AA99")) +
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Proportion of sampled plants",
-        title = "Proportion of individual plants with and without confirmed ozone \nfoliar injury, across all park units")+
+        title = "Rate of confirmed ozone \nfoliar injury, across all park units")+
     xlim(c(min(datAll$year), max(datAll$year)))
 ```
 :::
@@ -524,7 +524,7 @@ datAll_std |>
         strip.text = element_text(face = "italic")) +
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Proportion of sampled plants",
-        title = "Proportion of individual plants with and without confirmed ozone \nfoliar injury, across all park units")+
+        title = "Rate of confirmed ozone \nfoliar injury, across all park units")+
     xlim(c(min(datAll$year), max(datAll$year)))
 ```
 :::
@@ -561,7 +561,7 @@ datAll_std |>
   theme(palette.fill.discrete = c("#332288", "#DDCC77", "#44AA99")) +
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Proportion of sampled plants",
-        title = "Proportion of individual plants with and without confirmed ozone \nfoliar injury, by park unit")+
+        title = "Rate of confirmed ozone \nfoliar injury, by park unit")+
     xlim(c(min(datAll$year), max(datAll$year)))
 ```
 :::
@@ -617,7 +617,7 @@ for (i in seq_along(parkNames)) {
         strip.text = element_text(face = "italic")) +
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Proportion of sampled plants",
-        title = "Proportion of individual plants with and without confirmed ozone \nfoliar injury",
+        title = "Rate of confirmed ozone \nfoliar injury",
        subtitle = parkNames[i]) +
     xlim(c(min(datAll$year), max(datAll$year)))
 
@@ -834,8 +834,7 @@ for (i in seq_along(parkNames)) {
   labs(x = "Year", y = "Proportion of sampled plants",
         title = "Proportion of individual plants with differing severity of ozone \nfoliar injury by species",
        subtitle = parkNames[i]) +
-    xlim(c(min(datAll$year), max(datAll$year)))
-
+    xlim(c(min(datAll$year), max(datAll$year))) 
 }
 confirmedOzoneFigsByParkBySpp_2[[1]]
 confirmedOzoneFigsByParkBySpp_2[[2]]
@@ -856,37 +855,251 @@ confirmedOzoneFigsByParkBySpp_2[[14]]
 
 ## Which species have the highest rate of *confirmed* ozone foliar injury?
 
-::: {.callout-note collapse=true icone = false}
+::: {.callout-note collapse=true icon = false}
+## ... across all parks and years (i.e. species most likely to incur ozone injury)
 ```{r}
 datAll_rate <- datAll_std |> 
-  group_by(unitName, siteName, year, scientificName) |> 
+  group_by(scientificName) |> 
   summarize(rateOfOzoneInjury = mean(as.numeric(as.character(confirmedOzoneInjury)), na.rm = TRUE))
 
   #group_by(year, damageAmountCode) |>
   #summarize(n = length(year))
 
-# plot of number of individual plants w/ and without ozone by year across all park units
-datAll_std |>
-  ggplot() +
-  geom_bar(aes(x = as.integer(year), fill = as.factor(confirmedOzoneInjury)), width = 0.9) +
-  guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) +
-  theme(palette.fill.discrete = c("#332288", "#DDCC77", "#44AA99")) +
-  scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
-  labs(x = "Year", y = "Number of Individual Plants",
-        title = "Number of individual plants with and without confirmed ozone \nfoliar injury, across all park units")+
-    xlim(c(min(datAll$year), max(datAll$year)))
+# reorder species name column according to the rate of injury
+datAll_rate <- datAll_rate |> 
+  mutate(scientificName = fct_reorder(scientificName, rateOfOzoneInjury)) 
 
+# plot of number of individual plants w/ and without ozone by year across all park units
+(datAll_rate |>
+  ggplot() +
+  geom_segment(aes(y = scientificName, x = rateOfOzoneInjury, xend = 0))+ 
+  geom_point(aes(y = scientificName, x = rateOfOzoneInjury, col = as.factor(ceiling(rateOfOzoneInjury)))) + 
+    scale_color_discrete(palette = c("grey40", "tomato"), labels = c("zero", "non-zero"), name = "") +
+  # geom_text(aes(y = scientificName, x = rateOfOzoneInjury , label = round(rateOfOzoneInjury, 3)), 
+  #                         size = 3, position = position_nudge(x = ifelse(datAll_rate$rateOfOzoneInjury == 0, .01, .015))) + 
+  theme(axis.text.y = element_text(face = "italic")) + 
+  labs(x = "Rate of confirmed ozone foliar injury", 
+       y = "Species", 
+       title = "Species ranked by rate of confirmed ozone foliar injury, \nacross all parks and all years"))
 
 ```
 
 :::
 
+::: {.callout-note collapse=true icon = false}
+## ... by park, across all years
+```{r}
+datAll_rate <- datAll_std |> 
+  group_by(scientificName, unitName) |> 
+  summarize(rateOfOzoneInjury = mean(as.numeric(as.character(confirmedOzoneInjury)), na.rm = TRUE)) |> 
+  ungroup()
+
+
+confirmedOzoneRankings_byPark <- vector(length = length(parkNames), mode = "list")
+for (i in seq_along(parkNames)) {
+  dat_i <- datAll_rate |>  
+    filter(unitName == parkNames[i]) |>
+  filter(!is.na(rateOfOzoneInjury)) |>
+  mutate(scientificName = fct_reorder(scientificName, rateOfOzoneInjury))
+  confirmedOzoneRankings_byPark[[i]]  <- 
+    dat_i |> 
+  ggplot() +
+  geom_segment(aes(y = scientificName, x = rateOfOzoneInjury, xend = 0))+ 
+  geom_point(aes(y = scientificName, x = rateOfOzoneInjury, col = as.factor(ceiling(rateOfOzoneInjury)))) + 
+    scale_color_discrete(palette = c("grey40", "tomato"), labels = c("zero", "non-zero"), name = "") +
+  # geom_text(aes(y = scientificName, x = rateOfOzoneInjury , label = round(rateOfOzoneInjury, 3)), 
+  theme(axis.text.y = element_text(face = "italic")) + 
+  labs(x = "Rate of confirmed ozone foliar injury", 
+       y = "Species", 
+       title = "Species ranked by rate of confirmed ozone foliar injury, \nacross all parks and all years", 
+       subtitle = parkNames[i]) + 
+    xlim(0, max(datAll_rate$rateOfOzoneInjury) * 1.1)
+
+}
+
+confirmedOzoneRankings_byPark[[1]]
+confirmedOzoneRankings_byPark[[2]]
+confirmedOzoneRankings_byPark[[3]]
+confirmedOzoneRankings_byPark[[4]]
+confirmedOzoneRankings_byPark[[5]]
+confirmedOzoneRankings_byPark[[6]]
+confirmedOzoneRankings_byPark[[7]]
+confirmedOzoneRankings_byPark[[8]]
+confirmedOzoneRankings_byPark[[9]]
+confirmedOzoneRankings_byPark[[10]]
+confirmedOzoneRankings_byPark[[11]]
+confirmedOzoneRankings_byPark[[12]]
+confirmedOzoneRankings_byPark[[13]]
+confirmedOzoneRankings_byPark[[14]]
+```
+
+:::
+
+
 # Trend analysis
+
+Inspired in part by code from the forestTrends R package by Kate Miller, accessed 15 October, 2026
+
+## attempt # 1: 
+- fit a model across all data, using binary occurrence of confirmed foliar injury 
+- use a binomial glm, since the response is binary 
+- need to deal with spatial autocorrelation of values (is there enough data to use a random intercept?)
+
+::: {.callout-note collapse=true icon = false}
+### Looking at variables to determine how to construct the model
+```{r}
+# format data correctly
+datAll_std <- datAll_std |> 
+  mutate(confirmedOzoneInjury = as.numeric(as.character(confirmedOzoneInjury)))
+# remove equivocal classifications, since they make it impossible to use the binomial distribution (also is not really meaningful from an analysis standpoint?)
+datAll_std <- datAll_std |> 
+  filter(!is.na(confirmedOzoneInjury), 
+         confirmedOzoneInjury != 0.5)
+unique(datAll_std$confirmedOzoneInjury)
+
+# look at the response variable(presence/absence of injury) by year
+datAll_std |> 
+  ggplot() + 
+  geom_density(aes(x = confirmedOzoneInjury, colour = year, group = year))
+
+# look at the response variable(presence/absence of injury) by plot
+datAll_std |> 
+  ggplot() + 
+  geom_density(aes(x = confirmedOzoneInjury, colour = siteName, group = siteName))
+
+
+# look at the response variable(presence/absence of injury) by park unit
+datAll_std |> 
+  ggplot() + 
+  geom_density(aes(x = confirmedOzoneInjury, colour = unitName, group = unitName))
+
+
+# look at the response variable(presence/absence of injury) by species
+datAll_std |> 
+  ggplot() + 
+  geom_density(aes(x = confirmedOzoneInjury, colour = scientificName, group = scientificName))
+
+# is there a relationship between the response variable and year for different parks? 
+datAll_std |> 
+  ggplot() + 
+  geom_point(aes(y = jitter(confirmedOzoneInjury), x = year, 
+                 colour = unitName, group = unitName), alpha = .25) + 
+  geom_smooth(aes(y = jitter(confirmedOzoneInjury), x = year, 
+                 colour = unitName, group = unitName),  method = "glm")
+
+# is there a relationship between the park name and year of data collection? (due to panel design?) -- yes
+datAll_std |> 
+  ggplot() + 
+  geom_boxplot(aes(x = year, y = unitName), alpha = .25)
+anova(lm(year ~ unitName, data = datAll_std))
+
+# is there a relationship between the plot name and year of data collection? (due to panel design?) -- yes
+datAll_std |> 
+  ggplot() + 
+  geom_boxplot(aes(x = year, y = siteName), alpha = .25)
+anova(lm(year ~ siteName, data = datAll_std))
+
+## both of the above results are why having a random effect for site (or at least for year) in the model
+
+## we also know that different parks have different species, so having a random effect for species will help address that correlation
+
+## what is the sample size per group if we use a random effect for site and a random effect for species
+table(datAll_std |> select(siteName, scientificName))
+## there are not nearly enough observations to include a random effect for species (there are multiple species that have only a few (~2) observations) 
+table(datAll_std |> select(scientificName))
+```
+::: 
+
+### Fit a generalized linear mixed model with a random effect for plot name and a random effect for species.
+<!-- However, a model with the full dataset does not converge, likely because there are quite a few species for which there are only a few observations. In this model, we've removed species for which we have fewer than 20 observations -->
+```{r}
+# get names of species w/ fewer than 20 observations
+# smallSppNames <- datAll_std  |>
+#   group_by(scientificName) |>
+#   summarize( n  = n()) |>
+#   filter(n < 20) |>
+#   select(scientificName) |>
+#   as.vector() 
+# datSmaller <- datAll_std |>
+#   filter(!(scientificName %in% smallSppNames))
+
+# random effect for site and random effect for species (there is variation in the starting amount of foliar injury, and the change in rate of foliar injury over time is different for each species at each site )
+# try setting REML to "true" ()
+mod1 <- glmmTMB::glmmTMB(data = datAll_std, formula = confirmedOzoneInjury ~ year + (1|scientificName) + (1 |siteName),
+              family = binomial(link = "logit"))#,#$, control=glmerControl(optimizer="bobyqa")
+
+summary(mod1)
+```
+
+### Below are figures to evaluate the model fit
+We use the DHARMa R package to simulate scaled residuals ("a scaled residual value of 0.5 means that half of the simulated data are higher than the observed rate, half of them lower." -- from the DHARMa vignette). A well specified model will have scaled residuals with a uniform (flat) distribution, and will not show a directional relationship when plotted against model predictors. 
+```{r}
+# use the DHARMa package to simulate residuals and and plot the results
+mod1_resids <- simulateResiduals(mod1, 
+                                 integerResponse = TRUE, #for models with integer response
+                                 simulateREs = "unconditional" # re-simulates both random and fixed effects
+                                 )
+plot(mod1_resids)
+
+# plot residuals against year
+plotResiduals(mod1_resids, form = ~year)
+
+# look at the dispersion of the model 
+testDispersion(mod1_resids, plot = TRUE)
+
+# look at the dispersion of the model according to plot 
+testDispersion(recalculateResiduals(mod1_resids, group = ~siteName), plot = TRUE)
+
+# look at the dispersion of the model according to species 
+testDispersion(recalculateResiduals(mod1_resids, group = ~scientificName), plot = TRUE)
+
+```
+
+There is a significant KS test, which indicates that the data are not a good fit to the statistical distribution used in the model. The residuals also have significant quantile deviations (as seen in the right hand figure), which isn't ideal. However, the model does not appear to be over-dispersed. 
+
+As a result, we'll try using a model with park instead of plot as the random effect, which means a larger sample size per level of the random effect
+### Fit a generalized linear mixed model with a random effect for park name and a random effect for species.
+```{r}
+mod2 <- glmmTMB::glmmTMB(data = datAll_std, formula = confirmedOzoneInjury ~ year + (1|scientificName) + (1 |unitName),
+              family = binomial(link = "logit"))#,#$, control=glmerControl(optimizer="bobyqa")
+
+summary(mod2)
+```
+
+### Below are figures to evaluate the model fit
+```{r}
+# use the DHARMa package to simulate residuals and and plot the results
+mod2_resids <- simulateResiduals(mod2, 
+                                 integerResponse = TRUE, #for models with integer response
+                                 simulateREs = "unconditional" # re-simulates both random and fixed effects
+                                 )
+plot(mod2_resids)
+
+# plot residuals against year
+plotResiduals(mod2_resids, form = ~year)
+
+# look at the dispersion of the model 
+testDispersion(mod2_resids, plot = TRUE)
+
+# look at the dispersion of the model according to plot 
+testDispersion(recalculateResiduals(mod2_resids, group = ~siteName), plot = TRUE)
+
+# look at the dispersion of the model according to species 
+testDispersion(recalculateResiduals(mod2_resids, group = ~scientificName), plot = TRUE)
+
+```
+The results appear slightly better. There is no longer a significant KS test. The residuals still have significant quantile deviations (as seen in the right hand figure), which isn't ideal. However, the model does not appear to be over-dispersed. 
+
+
+
 Potential challenges: 
 - uneven sampling years across parks/units (plots are sampled on a panel design)
 - park name and year of data collection might be correlated due to the panel design
 
-
+# comparing rates of ozone injury by species 
+  Potential challenges: 
+    - non-independence of data (violates assumption of ANOVA) 
+    - could use a Kruskal-Wallis test, which is non-parametric?
 # Comparing data collected using the "standard" protocol to data collected using the "QA/QC" protocol
 
 # Comparing field identification of ozone foliar injury to the expert classification of voucher specimens
