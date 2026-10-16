@@ -16,7 +16,7 @@ All NPS units in the Cumberland Piedmont Inventory and Monitoring Network (CUPN)
 
 ```{r, include=FALSE}
 ## Load packages
-packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed")
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed", "datawizard", "performance", "see", "lmerTest")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
@@ -27,12 +27,15 @@ lapply(X = packageNames, FUN = function(x) require(package = x, character.only =
 ## set global options
 ggplot2::set_theme(theme_classic())
 
-## load data
+## load foliar injury data
 datAll <- read.csv("../Data/2315044/CUPN_OzoneFoliarInjury_SpeciesAssesment.csv")
 datAll <- datAll |> 
   mutate(startDate = as_date(startDate)) |> # format the date
   mutate(year = year(startDate)) |> # make a column for year
   mutate(damageAmountCode_bin = replace(x = damageAmountCode,list = c(damageAmountCode != 0), values = 1)) # make a binary variable for damaged or not damaged
+
+# load ozone indicator data
+ozoneDat <- read.csv("../Data/OzoneIndicatorData/OzoneExposureIndexForVeg.csv")
 ```
 
 When data were collected, data collectors recorded individuals with what they determined in the field to be ozone damage. We subsequently refer to these observations as "suspected ozone foliar injury." Field crews then collected a voucher specimen consisting of three leaves from three individuals for each species in a plot that had foliar injury. These voucher specimens were then sent to an expert for verification of the cause of foliar injury. That status (positive or negative for foliar injury) is then assigned to all individuals of that species in that plot that the field crew suspected had foliar injury). We refer to foliar injury data after confirmation by an expert as "confirmed ozone foliar injury." 
@@ -59,6 +62,17 @@ datNew <- datNew |>
 Note that for the below plots, we only show information collected during "standard" plots (not "QA/QC") do avoid double-sampling of individuals. Later in this document we compare data collection across these two types of sampling to assess accuracy. 
 
 # Exploratory figures
+
+## Ozone Exposure Index for Vegetation
+The Ozone exposure index for vegetation is the "3-month maximum 12-hour W126 index that occurs during the growing season (March–September), measured in parts per million-hours (ppm-hrs). The W126 index is a biologically relevant measure that preferentially weights the higher ozone concentrations more likely to cause plant damage." This definition and the ozone index values come from the NPS Air Quality in Parks [website](https://www.nps.gov/subjects/air/park-conditions-trends.htm). There are yearly data collected on site for some park units. For others, there is an interpolated average index for each year, interpolates values from nearby stations and averages them over the previous five years (inclusive of the "current" year). For parks with on-site data collection, we also calculate a five year average index to allow us to compare values across all parks in the sampling protocol. 
+
+### Calculating 5-year average ozone index for parks with on-site, yearly monitoring
+```{r}
+
+```
+
+
+
 ## Presence and rate of *suspected* ozone foliar injury across all parks across time...
 
 ::: {.callout-note collapse=true icon = false}
@@ -889,6 +903,7 @@ datAll_rate <- datAll_rate |>
 ::: {.callout-note collapse=true icon = false}
 ## ... by park, across all years
 ```{r}
+#| message: FALSE
 datAll_rate <- datAll_std |> 
   group_by(scientificName, unitName) |> 
   summarize(rateOfOzoneInjury = mean(as.numeric(as.character(confirmedOzoneInjury)), na.rm = TRUE)) |> 
@@ -911,7 +926,7 @@ for (i in seq_along(parkNames)) {
   theme(axis.text.y = element_text(face = "italic")) + 
   labs(x = "Rate of confirmed ozone foliar injury", 
        y = "Species", 
-       title = "Species ranked by rate of confirmed ozone foliar injury, \nacross all parks and all years", 
+       title = "Species ranked by rate of confirmed ozone foliar injury, \nacross all years", 
        subtitle = parkNames[i]) + 
     xlim(0, max(datAll_rate$rateOfOzoneInjury) * 1.1)
 
@@ -936,263 +951,473 @@ confirmedOzoneRankings_byPark[[14]]
 :::
 
 
-# Trend analysis
+<!-- # Trend analysis -->
 
-Inspired in part by code from the forestTrends R package by Kate Miller, accessed 15 October, 2026
-```{r, echo = FALSE}
-# read in functions
-source(file  = "../Functions/AnalysisFunctions.R")
-```
+<!-- Inspired in part by code from the forestTrends R package by Kate Miller, accessed 15 October, 2026 -->
+<!-- ```{r, echo = FALSE} -->
+<!-- # read in functions -->
+<!-- source(file  = "../Functions/AnalysisFunctions.R") -->
+<!-- ``` -->
 
-## attempt # 1: 
-- fit a model across all data, using binary occurrence of confirmed foliar injury 
-- use a binomial glm, since the response is binary 
-- need to deal with spatial autocorrelation of values (is there enough data to use a random intercept?)
+<!-- ::: {.callout-note collapse=true icon = false} -->
+<!-- ### Looking at variables to determine how to construct the model -->
+<!-- ```{r} -->
+<!-- # format data correctly -->
+<!-- datAll_std <- datAll_std |>  -->
+<!--   mutate(confirmedOzoneInjury = as.numeric(as.character(confirmedOzoneInjury))) -->
+<!-- # scale year  -->
+<!-- datAll_std <- datAll_std |>  -->
+<!--   mutate(year_s = datawizard::standardize(year)) -->
+<!-- # remove two observations with no year?  -->
+<!-- datAll_std <- datAll_std |>  -->
+<!--   filter(!is.na(year)) -->
+<!-- # remove equivocal classifications, since they make it impossible to use the binomial distribution (also is not really meaningful from an analysis standpoint?) -->
+<!-- datAll_std <- datAll_std |>  -->
+<!--   filter(!is.na(confirmedOzoneInjury),  -->
+<!--          confirmedOzoneInjury != 0.5) -->
+<!-- unique(datAll_std$confirmedOzoneInjury) -->
 
-::: {.callout-note collapse=true icon = false}
-### Looking at variables to determine how to construct the model
-```{r}
-# format data correctly
-datAll_std <- datAll_std |> 
-  mutate(confirmedOzoneInjury = as.numeric(as.character(confirmedOzoneInjury)))
-# remove equivocal classifications, since they make it impossible to use the binomial distribution (also is not really meaningful from an analysis standpoint?)
-datAll_std <- datAll_std |> 
-  filter(!is.na(confirmedOzoneInjury), 
-         confirmedOzoneInjury != 0.5)
-unique(datAll_std$confirmedOzoneInjury)
+<!-- # look at the response variable(presence/absence of injury) by year -->
+<!-- datAll_std |>  -->
+<!--   ggplot() +  -->
+<!--   geom_density(aes(x = confirmedOzoneInjury, colour = year, group = year)) -->
 
-# look at the response variable(presence/absence of injury) by year
-datAll_std |> 
-  ggplot() + 
-  geom_density(aes(x = confirmedOzoneInjury, colour = year, group = year))
-
-# look at the response variable(presence/absence of injury) by plot
-datAll_std |> 
-  ggplot() + 
-  geom_density(aes(x = confirmedOzoneInjury, colour = siteName, group = siteName))
-
-
-# look at the response variable(presence/absence of injury) by park unit
-datAll_std |> 
-  ggplot() + 
-  geom_density(aes(x = confirmedOzoneInjury, colour = unitName, group = unitName))
+<!-- # look at the response variable(presence/absence of injury) by plot -->
+<!-- datAll_std |>  -->
+<!--   ggplot() +  -->
+<!--   geom_density(aes(x = confirmedOzoneInjury, colour = siteName, group = siteName)) -->
 
 
-# look at the response variable(presence/absence of injury) by species
-datAll_std |> 
-  ggplot() + 
-  geom_density(aes(x = confirmedOzoneInjury, colour = scientificName, group = scientificName))
-
-# is there a relationship between the response variable and year for different parks? 
-datAll_std |> 
-  ggplot() + 
-  geom_point(aes(y = jitter(confirmedOzoneInjury), x = year, 
-                 colour = unitName, group = unitName), alpha = .25) + 
-  geom_smooth(aes(y = jitter(confirmedOzoneInjury), x = year, 
-                 colour = unitName, group = unitName),  method = "glm")
-
-# is there a relationship between the park name and year of data collection? (due to panel design?) -- yes
-datAll_std |> 
-  ggplot() + 
-  geom_boxplot(aes(x = year, y = unitName), alpha = .25)
-anova(lm(year ~ unitName, data = datAll_std))
-
-# is there a relationship between the plot name and year of data collection? (due to panel design?) -- yes
-datAll_std |> 
-  ggplot() + 
-  geom_boxplot(aes(x = year, y = siteName), alpha = .25)
-anova(lm(year ~ siteName, data = datAll_std))
-
-## both of the above results are why having a random effect for site (or at least for year) in the model
-
-## we also know that different parks have different species, so having a random effect for species will help address that correlation
-
-## what is the sample size per group if we use a random effect for site and a random effect for species
-table(datAll_std |> select(siteName, scientificName))
-## there are not nearly enough observations to include a random effect for species (there are multiple species that have only a few (~2) observations) 
-table(datAll_std |> select(scientificName))
-```
-::: 
-
-### Fit a generalized linear mixed model with a random effect for plot name and a random effect for species.
-<!-- However, a model with the full dataset does not converge, likely because there are quite a few species for which there are only a few observations. In this model, we've removed species for which we have fewer than 20 observations -->
-```{r}
-# get names of species w/ fewer than 20 observations
-# smallSppNames <- datAll_std  |>
-#   group_by(scientificName) |>
-#   summarize( n  = n()) |>
-#   filter(n < 20) |>
-#   select(scientificName) |>
-#   as.vector() 
-# datSmaller <- datAll_std |>
-#   filter(!(scientificName %in% smallSppNames))
-
-# random effect for site and random effect for species (there is variation in the starting amount of foliar injury, and the change in rate of foliar injury over time is different for each species at each site )
-# try setting REML to "true" ()
-mod1 <- glmmTMB::glmmTMB(data = datAll_std, formula = confirmedOzoneInjury ~ year + (1|scientificName) + (1 |siteName),
-              family = binomial(link = "logit"))#,#$, control=glmerControl(optimizer="bobyqa")
-
-summary(mod1)
-```
-
-### Below are figures to evaluate the model fit
-We use the DHARMa R package to simulate scaled residuals ("a scaled residual value of 0.5 means that half of the simulated data are higher than the observed rate, half of them lower." -- from the DHARMa vignette). A well specified model will have scaled residuals with a uniform (flat) distribution, and will not show a directional relationship when plotted against model predictors. 
-```{r}
-# use the DHARMa package to simulate residuals and and plot the results
-mod1_resids <- simulateResiduals(mod1, 
-                                 integerResponse = TRUE, #for models with integer response
-                                 simulateREs = "unconditional" # re-simulates both random and fixed effects
-                                 )
-plot(mod1_resids)
-
-# plot residuals against year
-plotResiduals(mod1_resids, form = ~year)
-
-# look at the dispersion of the model 
-testDispersion(mod1_resids, plot = TRUE)
-
-# look at the dispersion of the model according to plot 
-testDispersion(recalculateResiduals(mod1_resids, group = ~siteName), plot = TRUE)
-
-# look at the dispersion of the model according to species 
-testDispersion(recalculateResiduals(mod1_resids, group = ~scientificName), plot = TRUE)
-
-```
-
-There is a significant KS test, which indicates that the data are not a good fit to the statistical distribution used in the model. The residuals also have significant quantile deviations (as seen in the right hand figure), which isn't ideal. However, the model does not appear to be over-dispersed. 
-
-As a result, we'll try using a model with park instead of plot as the random effect, which means a larger sample size per level of the random effect
-### Fit a generalized linear mixed model with a random effect for park name and a random effect for species.
-```{r}
-mod2 <- glmmTMB::glmmTMB(data = datAll_std, formula = confirmedOzoneInjury ~ year + (1|scientificName) + (1 |unitName),
-              family = binomial(link = "logit"))#,#$, control=glmerControl(optimizer="bobyqa")
-
-summary(mod2)
-```
-
-### Below are figures to evaluate the model fit
-```{r}
-# use the DHARMa package to simulate residuals and and plot the results
-mod2_resids <- simulateResiduals(mod2, 
-                                 integerResponse = TRUE, #for models with integer response
-                                 simulateREs = "unconditional" # re-simulates both random and fixed effects
-                                 )
-plot(mod2_resids)
-
-# plot residuals against year
-plotResiduals(mod2_resids, form = ~year)
-
-# look at the dispersion of the model 
-testDispersion(mod2_resids, plot = TRUE)
-
-# look at the dispersion of the model according to plot 
-testDispersion(recalculateResiduals(mod2_resids, group = ~siteName), plot = TRUE)
-
-# look at the dispersion of the model according to species 
-testDispersion(recalculateResiduals(mod2_resids, group = ~scientificName), plot = TRUE)
-
-```
-The results appear slightly better. There is no longer a significant KS test. The residuals still have significant quantile deviations (as seen in the right hand figure), which isn't ideal. However, the model does not appear to be over-dispersed. 
+<!-- # look at the response variable(presence/absence of injury) by park unit -->
+<!-- datAll_std |>  -->
+<!--   ggplot() +  -->
+<!--   geom_density(aes(x = confirmedOzoneInjury, colour = unitName, group = unitName)) -->
 
 
-### Now, look at the coefficients resulting from this model as well as their confidence intervals
-```{r}
-mod_df <- broom.mixed::tidy(mod2) |> 
-  dplyr::filter(effect == 'fixed') |>
-      dplyr::select(term, estimate) |> data.frame()
+<!-- # look at the response variable(presence/absence of injury) by species -->
+<!-- datAll_std |>  -->
+<!--   ggplot() +  -->
+<!--   geom_density(aes(x = confirmedOzoneInjury, colour = scientificName, group = scientificName)) -->
 
-new_df <- data.frame("year" = sort(unique(mod2$frame$year)))
-pred_df <- data.frame(term = paste0(substr("year", 1, 1), new_df[,"year"], "_response"),
-                          estimate = stats::predict(mod2, newdata = new_df,
-                                                    type = 'response', re.form = NA))
+<!-- # is there a relationship between the response variable and year for different parks?  -->
+<!-- datAll_std |>  -->
+<!--   ggplot() +  -->
+<!--   geom_point(aes(y = jitter(confirmedOzoneInjury), x = year,  -->
+<!--                  colour = unitName, group = unitName), alpha = .25) +  -->
+<!--   geom_smooth(aes(y = jitter(confirmedOzoneInjury), x = year,  -->
+<!--                  colour = unitName, group = unitName),  method = "glm") -->
 
-# plot the coefficients 
- broom.mixed::tidy(mod2, conf.int = TRUE)  |> 
-   transform(term=sprintf("%s.%s", component, term)) |> 
-   mutate(model = "mod2") |> 
-  dotwhisker::dwplot() + geom_vline(xintercept = 0, lty = 2) + xlim(-5,5)
-```
+<!-- # is there a relationship between the park name and year of data collection? (due to panel design?) -- yes -->
+<!-- datAll_std |>  -->
+<!--   ggplot() +  -->
+<!--   geom_boxplot(aes(x = year, y = unitName), alpha = .25) -->
+<!-- anova(lm(year ~ unitName, data = datAll_std)) -->
 
-### Make bootstrap confidence intervals (like in forestTrends R package) 
-```{r}
- plots <- data.frame(unique(datAll_std[,"unitName"]))
-species <- data.frame(unique(datAll_std[,"scientificName"]))
-chatty <- T
-num_reps <-  100
+<!-- # is there a relationship between the plot name and year of data collection? (due to panel design?) -- yes -->
+<!-- datAll_std |>  -->
+<!--   ggplot() +  -->
+<!--   geom_boxplot(aes(x = year, y = siteName), alpha = .25) -->
+<!-- anova(lm(year ~ siteName, data = datAll_std)) -->
 
-  real_mod <- (case_boot_sample_MINE(datAll_std, x = "year", y = "confirmedOzoneInjury", ID = "unitName", sample = F, sample_num = 1,
-                                                group = unitName,
-                                                random_type = "custom", random_formula = "(1|unitName) + (1|scientificName)",
-                                                random_cols = "scientificName", 
-                                                model_type = 'glmmTMB') |>
-                               dplyr::select(-boot_num))
-  try(real_mod <-  real_mod |> dplyr::select(-isSingular))
+<!-- ## both of the above results are why having a random effect for site (or at least for year) in the model -->
 
+<!-- ## we also know that different parks have different species, so having a random effect for species will help address that correlation -->
+<!-- ## how many plots are in each park?  -->
+<!-- table(datAll_std |> select(siteName, unitName) |> unique() |> select(unitName)) -->
 
-    boot_mod <-
-      suppressWarnings(purrr::map(seq_len(num_reps),
-                                     ~case_boot_sample_MINE(datAll_std, x = "year", y = "confirmedOzoneInjury", ID = "unitName", 
-                                                       sample = T, sample_num = .x,
-                                                       group = unitName,
-                                                random_type = "custom", random_formula = "(1|unitName) + (1|scientificName)",
-                                                random_cols = "scientificName", 
-                                                model_type = 'glmmTMB'), .progress = chatty) |>
-                       purrr::list_rbind() |>
-      tidyr::pivot_wider(names_from = term, values_from = estimate)) |>  data.frame()
+<!-- ## how many species are in a park?  -->
+<!-- table(datAll_std |> select(unitName, scientificName) |> unique() |> select(unitName)) -->
 
+<!-- ## how many species are in a site?  -->
+<!-- table(datAll_std |> select(siteName, scientificName) |> unique() |> select(siteName)) -->
 
-    boot_CIs <- data.frame(t(apply(boot_mod |> dplyr::select(-boot_num), 2,
-                                   quantile, probs = c(0.025, 0.975), na.rm = T)))#,
-                           #num_boots = sum((ifelse(is.na(x), 0, 1))))
-                           #num_boots_sing = sum(boot_mod$isSingular, na.rm = T))
+<!-- ## there are not nearly enough observations to include a random effect for species (there are multiple species that have only a few (~2) observations)  -->
+<!-- table(datAll_std |> select(scientificName)) -->
+<!-- ``` -->
+<!-- :::  -->
 
-    # num_boot_sing <- unique(boot_CIs$num_boots_sing)
-    # num_boot_fail <- num_reps - max(boot_CIs$num_boots)
-    # 
-    # if(num_boot_fail == 0 & num_boot_sing > 0){
-    #   warning(paste0("Singular fits occurred in ", num_boot_sing, " bootstrapped samples, but all models returned fits."))}
-    # 
-    # if(num_boot_fail > 0 & num_boot_sing > 0){
-    #   warning(paste0("Singular fits occurred in ", num_boot_sing, " bootstrapped samples, and ", num_boot_fail,
-    #                " bootstrapped samples failed to return a model fit."))}
-    # 
-    # if(num_boot_fail > 0 & num_boot_sing == 0){
-    #   warning(paste0(num_boot_fail, " bootstrapped samples failed to return a model fit."))}
-
-    boot_CIs$term <- rownames(boot_CIs)
-    boot_CIs <- boot_CIs #|>  dplyr::select(-num_boots_sing)
-
-    colnames(boot_CIs) <- c("lower95", "upper95", #"num_boots", 
-                            "term")
-
- ## CIs for estimates and prediction intervals for response (across all) sites and species
-```
-
-```{r}
-modelPreds <- real_mod |> 
-  slice(3:nrow(real_mod)) |> 
-  rename(confirmedOzoneInjury =estimate) |> 
-  mutate(year = as.integer(str_extract(term, pattern = "[0-9]+"))) |> 
-  left_join(boot_CIs |> slice(3:nrow(boot_CIs)))
-ggplot() + 
-  #geom_point(data = datAll_std, aes(x = year, y = jitter(confirmedOzoneInjury), col = unitName)) + 
-  geom_ribbon(data = modelPreds, aes(x = year, ymin = lower95, ymax = upper95)) +
-  geom_point(data = modelPreds, aes(x = year, y = confirmedOzoneInjury)) + 
-  #geom_line(data = modelPreds, aes(x = year, y = ((1)/(1 + exp(493.4503 + -0.2484 * year) ))))
-  
-```
-
-### Now, generate prediction intervals around the predictions of the model 
+<!-- ## Model attempt # 1:  -->
+<!-- * The response variable is presence or absence of ozone foliar injury (there isn't very much variation in severity of foliar injury -- the data are very zero inflated-- so we may need to use another model structure for that model) -->
+<!-- * We will use a binomial generalized linear mixed model, which is suitable for a binary response variable  -->
+<!-- * We will fit the model across all of the sites in order to maximize the amount of data available -->
+<!-- * Because the data are not independent (plots are visited repeatedly, and the park unit determines the years when plots are visited), *we'll use random intercepts for both Park and Plot*.  -->
+<!-- * We also expect that occurrence of foliar injury is different for different species due to differences in susceptibility. We also think that the trend in foliar injury is likely different across species. To help account for this, we include a *random slope for year with respect to species (a random intercept for species)*   -->
+<!-- * I don't think the observations are temporally autocorrelated, because the presence of foliar injury in a previous year does not affect the presence of foliar injury in a subsequent year (leaves re-grow annually).  -->
+<!-- * The fact that plots aren't sampled every year in most parks is likely not problematic, since the presence/absence of data in a given year isn't related to ozone or other drivers (i.e. the data aren't "Missing Not at Random")  -->
+<!-- * This analysis makes the assumption that parks are assigned to panels randomly, and not using some other variable that may be confounding with ozone quantity or one of the predictors in the models.  -->
 
 
-Potential challenges: 
-- uneven sampling years across parks/units (plots are sampled on a panel design)
-- park name and year of data collection might be correlated due to the panel design
 
-# comparing rates of ozone injury by species 
-  Potential challenges: 
-    - non-independence of data (violates assumption of ANOVA) 
-    - could use a Kruskal-Wallis test, which is non-parametric?
-# Comparing data collected using the "standard" protocol to data collected using the "QA/QC" protocol
 
-# Comparing field identification of ozone foliar injury to the expert classification of voucher specimens
+<!-- ### Fit a generalized linear mixed model with a random effect for plot name and a random effect for species. -->
+<!-- <!-- However, a model with the full dataset does not converge, likely because there are quite a few species for which there are only a few observations. In this model, we've removed species for which we have fewer than 20 observations --> -->
+<!-- ```{r} -->
+<!-- # get names of species w/ fewer than 20 observations -->
+<!-- # smallSppNames <- datAll_std  |> -->
+<!-- #   group_by(scientificName) |> -->
+<!-- #   summarize( n  = n()) |> -->
+<!-- #   filter(n < 20) |> -->
+<!-- #   select(scientificName) |> -->
+<!-- #   as.vector()  -->
+<!-- # datSmaller <- datAll_std |> -->
+<!-- #   filter(!(scientificName %in% smallSppNames)) -->
+
+<!-- # random effect for site and random effect for species (there is variation in the starting amount of foliar injury, and the change in rate of foliar injury over time is different for each species at each site ) -->
+<!-- # try setting REML to "true" () -->
+<!-- mod1 <- glmer(data = datAll_std, formula = confirmedOzoneInjury ~ year_s + (1|scientificName) + (1 |siteName) + (1|unitName), family = binomial(link = "logit"), control=glmerControl(optimizer="Nelder_Mead")) -->
+
+<!-- summary(mod1) -->
+<!-- ``` -->
+
+<!-- ### Look at patterns in simulated residuals  -->
+<!-- (conditional residuals, to look at patterns in the random effects since we already know that the random effect variables are driving patterns in the response so we expect to see patterns in the unconditional/marginal residuals) -->
+<!-- We use the DHARMa R package to simulate scaled residuals ("a scaled residual value of 0.5 means that half of the simulated data are higher than the observed rate, half of them lower." -- from the DHARMa vignette). A well specified model will have scaled residuals with a uniform (flat) distribution, and will not show a directional relationship when plotted against model predictors.  -->
+<!-- ```{r} -->
+
+<!-- # use the DHARMa package to simulate residuals and and plot the results -->
+<!-- mod1_resids <- simulateResiduals(mod1,  -->
+<!--                                  response = TRUE, #for models with integer response -->
+<!--                                  simulateREs = "conditional" # re-simulates both random and fixed effects -->
+<!--                                  ) -->
+<!-- plot(mod1_resids) -->
+
+<!-- # plot residuals against year -->
+<!-- plotResiduals(mod1_resids, form = ~year_s) -->
+<!-- # plot residuals against species -->
+<!-- plotResiduals(mod1_resids, form= ~scientificName) -->
+<!-- # plot residuals against plot -->
+<!-- plotResiduals(mod1_resids, form= ~siteName, ) -->
+<!-- # plot residuals against park -->
+<!-- plotResiduals(mod1_resids, form= ~unitName) -->
+
+<!-- # look at the dispersion of the model  -->
+<!-- testDispersion(mod1_resids, plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to species  -->
+<!-- testDispersion(recalculateResiduals(mod1_resids, group = ~scientificName), plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to plot  -->
+<!-- testDispersion(recalculateResiduals(mod1_resids, group = ~siteName), plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to park  -->
+<!-- testDispersion(recalculateResiduals(mod1_resids, group = ~unitName), plot = TRUE) -->
+
+<!-- ## what is the correlation between the random effect terms? what is the standard deviation? -->
+<!-- VarCorr(mod1) |> as.data.frame() -->
+<!-- ``` -->
+
+<!-- There is not significant KS test, which indicates that the data are a good fit to the statistical distribution used in the model. The residuals do hot have a significant pattern of variation across year, however there is some significant variation across species, plot, and park. However, the model does not appear to be over-dispersed.  -->
+<!-- The standard deviations of the random effects aren't too close to zero, so the data are currently supporting the random effect.  -->
+
+
+
+<!-- ### Look at patterns in the random effects -->
+<!-- ```{r} -->
+<!-- # the random effects from the model -->
+<!-- mod1_ranEf <- ranef(mod1) -->
+
+<!-- # is the species random effect correlated with the predictor?  -->
+<!-- y <- aggregate(year_s ~ scientificName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod1_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year") -->
+<!-- abline(lm(mod1_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod1_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),  -->
+<!--      x = 0.8,  -->
+<!--      y = 3) -->
+
+
+<!-- # is the site random effect correlated with the predictor?  -->
+<!-- y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod1_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year") -->
+<!-- abline(lm(mod1_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod1_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),  -->
+<!--      x = 0.35,  -->
+<!--      y = 2.5) -->
+
+<!-- # is the park random effect correlated with the predictor?  -->
+<!-- y3 <- aggregate(year_s ~ unitName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod1_ranEf$unitName$`(Intercept)` ~ y3$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year") -->
+<!-- abline(lm(mod1_ranEf$unitName$`(Intercept)` ~ y3$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod1_ranEf$unitName$`(Intercept)`, y = y3$year_s), 4)),  -->
+<!--      x = 0.35,  -->
+<!--      y = 0.5) -->
+
+<!-- ``` -->
+<!-- There are weak correlations between the random effects and year (scaled), but they are weak enough I think to not be problematic.  -->
+
+<!-- As a result, we'll try using a model with a random slope for year according to species -->
+
+
+
+
+<!-- ___________ -->
+<!-- ### Fit a generalized linear mixed model with random effect for park, site, and species, and a random slope for year according to species -->
+<!-- ```{r} -->
+<!-- mod2 <- glmer(data = datAll_std, formula = confirmedOzoneInjury ~ year_s +  (1 + year_s|scientificName) + (1 |siteName) + (1|unitName), family = binomial(link = "logit"), control=glmerControl(optimizer="Nelder_Mead")) -->
+
+<!-- summary(mod2) -->
+<!-- ``` -->
+
+<!-- ### Look at patterns in simulated residuals (conditional residuals, to look at patterns in the random effects since we already know that the random effect variables are driving patterns in the response so we expect to see patterns in the unconditional/marginal residuals) -->
+<!-- ```{r} -->
+
+<!-- # use the DHARMa package to simulate residuals and and plot the results -->
+<!-- mod2_resids <- simulateResiduals(mod2,  -->
+<!--                                  response = TRUE, #for models with integer response -->
+<!--                                  simulateREs = "conditional" # re-simulates both random and fixed effects -->
+<!--                                  ) -->
+<!-- plot(mod2_resids) -->
+
+<!-- # plot residuals against year -->
+<!-- plotResiduals(mod2_resids, form = ~year_s) -->
+<!-- # plot residuals against species -->
+<!-- plotResiduals(mod2_resids, form= ~scientificName) -->
+<!-- # plot residuals against plot -->
+<!-- plotResiduals(mod2_resids, form= ~siteName, ) -->
+<!-- # plot residuals against park -->
+<!-- plotResiduals(mod2_resids, form= ~unitName) -->
+
+<!-- # look at the dispersion of the model  -->
+<!-- testDispersion(mod2_resids, plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to species  -->
+<!-- testDispersion(recalculateResiduals(mod2_resids, group = ~scientificName), plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to plot  -->
+<!-- testDispersion(recalculateResiduals(mod2_resids, group = ~siteName), plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to park  -->
+<!-- testDispersion(recalculateResiduals(mod2_resids, group = ~unitName), plot = TRUE) -->
+
+<!-- ## what is the correlation between the random effect terms? what is the standard deviation? -->
+<!-- VarCorr(mod2) |> as.data.frame() -->
+<!-- ``` -->
+<!-- The results are still not great. There is no longer a significant KS test. The residuals still have significant quantile deviations (as seen in the right hand figure), which isn't ideal. The residuals also have inconsistent variance across the random effect groupings. However, the model does not appear to be over-dispersed.  -->
+
+<!-- ### Look at patterns in the random effects -->
+<!-- ```{r} -->
+<!-- # the random effects from the model -->
+<!-- mod2_ranEf <- ranef(mod2) -->
+
+<!-- # is the species random effect correlated with the predictor?  -->
+<!-- y <- aggregate(year_s ~ scientificName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod2_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year") -->
+<!-- abline(lm(mod2_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod2_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),  -->
+<!--      x = 0.8,  -->
+<!--      y = 3) -->
+
+
+<!-- # is the site random effect correlated with the predictor?  -->
+<!-- y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod2_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year") -->
+<!-- abline(lm(mod2_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod2_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),  -->
+<!--      x = 0.35,  -->
+<!--      y = 2.5) -->
+
+<!-- # is the park random effect correlated with the predictor?  -->
+<!-- y3 <- aggregate(year_s ~ unitName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod2_ranEf$unitName$`(Intercept)` ~ y3$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year") -->
+<!-- abline(lm(mod2_ranEf$unitName$`(Intercept)` ~ y3$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod2_ranEf$unitName$`(Intercept)`, y = y3$year_s), 4)),  -->
+<!--      x = 0.35,  -->
+<!--      y = 0.5) -->
+<!-- ``` -->
+<!-- There are weak correlations between the random effects and year (scaled), but they are weak enough I think to not be problematic -->
+
+
+<!-- ___________ -->
+<!-- ### Fit a generalized linear mixed model with random effect for park, site, and species, and a random slope for year according to species *and* park  -->
+<!-- - chose to include a random intercept for park, since there was grouping of residuals according to park in the previous models  -->
+<!--   - adding a regular random slope for year "(1 + year_s|unitName)" caused a singular fit, but using a random slope for year that is uncorrelated with the random intercept for park works ("(0 + year_s|unitName)") (from Ben Bolker's gitHub https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html#model-definition) -->
+<!-- ```{r} -->
+<!-- mod3 <- glmer(data = datAll_std, formula = confirmedOzoneInjury ~ year_s +  (1 |scientificName) + (1 |siteName) + (0 + year_s|unitName), family = binomial(link = "logit"), control=glmerControl(optimizer="Nelder_Mead")) -->
+
+<!-- summary(mod3) -->
+<!-- ``` -->
+
+<!-- ### Look at patterns in simulated residuals (conditional residuals, to look at patterns in the random effects since we already know that the random effect variables are driving patterns in the response so we expect to see patterns in the unconditional/marginal residuals) -->
+<!-- ```{r} -->
+
+<!-- # use the DHARMa package to simulate residuals and and plot the results -->
+<!-- mod3_resids <- simulateResiduals(mod3,  -->
+<!--                                  response = TRUE, #for models with integer response -->
+<!--                                  simulateREs = "conditional" # re-simulates both random and fixed effects -->
+<!--                                  ) -->
+<!-- plot(mod3_resids) -->
+
+<!-- # plot residuals against year -->
+<!-- plotResiduals(mod3_resids, form = ~year_s) -->
+<!-- # plot residuals against species -->
+<!-- plotResiduals(mod3_resids, form= ~scientificName) -->
+<!-- # plot residuals against plot -->
+<!-- plotResiduals(mod3_resids, form= ~siteName, ) -->
+<!-- # plot residuals against park -->
+<!-- plotResiduals(mod3_resids, form= ~unitName) -->
+
+<!-- # look at the dispersion of the model  -->
+<!-- testDispersion(mod3_resids, plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to species  -->
+<!-- testDispersion(recalculateResiduals(mod3_resids, group = ~scientificName), plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to plot  -->
+<!-- testDispersion(recalculateResiduals(mod3_resids, group = ~siteName), plot = TRUE) -->
+
+<!-- # look at the dispersion of the model according to park  -->
+<!-- testDispersion(recalculateResiduals(mod3_resids, group = ~unitName), plot = TRUE) -->
+
+<!-- ## what is the correlation between the random effect terms? what is the standard deviation? -->
+<!-- VarCorr(mod3) |> as.data.frame() -->
+<!-- ``` -->
+<!-- The results are still not great. There is no longer a significant KS test. The residuals still have significant quantile deviations (as seen in the right hand figure), which isn't ideal. The residuals also have inconsistent variance across the random effect groupings. However, the model does not appear to be over-dispersed.  -->
+
+<!-- ### Look at patterns in the random effects -->
+<!-- ```{r} -->
+<!-- # the random effects from the model -->
+<!-- mod3_ranEf <- ranef(mod3) -->
+
+<!-- # is the species random effect correlated with the predictor?  -->
+<!-- y <- aggregate(year_s ~ scientificName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod3_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year") -->
+<!-- abline(lm(mod3_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod3_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),  -->
+<!--      x = 0.8,  -->
+<!--      y = 3) -->
+
+
+<!-- # is the site random effect correlated with the predictor?  -->
+<!-- y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod3_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year") -->
+<!-- abline(lm(mod3_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod3_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),  -->
+<!--      x = 0.35,  -->
+<!--      y = 2.5) -->
+
+<!-- # is the park random effect correlated with the predictor?  -->
+<!-- y3 <- aggregate(year_s ~ unitName, FUN = mean, data = datAll_std) -->
+
+<!-- plot(mod3_ranEf$unitName$`(Intercept)` ~ y3$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year") -->
+<!-- abline(lm(mod3_ranEf$unitName$`(Intercept)` ~ y3$year_s), col = "red") -->
+<!-- text(paste0("corr=",round(cor(x = mod3_ranEf$unitName$`(Intercept)`, y = y3$year_s), 4)),  -->
+<!--      x = 0.35,  -->
+<!--      y = 0.5) -->
+<!-- ``` -->
+<!-- There are weak correlations between the random effects and year (scaled), but they are weak enough I think to not be problematic -->
+<!-- ___________________ -->
+
+<!-- ### Look at patterns of residuals within each level of the random effects -->
+<!-- ```{r} -->
+<!-- plot(mod2, resid(., scaled=TRUE) ~ year_s | unitName, abline = 0) -->
+<!-- ``` -->
+
+<!-- ### Now, look at the coefficients resulting from this model as well as their confidence intervals -->
+<!-- ```{r} -->
+<!-- mod_df <- broom.mixed::tidy(mod2) |>  -->
+<!--   dplyr::filter(effect == 'fixed') |> -->
+<!--       dplyr::select(term, estimate) |> data.frame() -->
+
+<!-- new_df <- data.frame("year_s" = sort(unique(mod2@frame$year_s))) -->
+<!-- pred_df <- data.frame(term = paste0(substr("year_s", 1, 1), new_df[,"year_s"], "_response"), -->
+<!--                           estimate = stats::predict(mod2, newdata = new_df, -->
+<!--                                                     type = 'response', re.form = NA)) -->
+
+<!-- # plot the fixed effect coefficients  -->
+<!--  broom.mixed::tidy(mod2, conf.int = TRUE)  |>  -->
+<!--    filter(effect == "fixed") |>  -->
+<!--    #transform(term=sprintf("%s.%s", term)) |>  -->
+<!--    mutate(model = "mod2") |>  -->
+<!--   dotwhisker::dwplot(show_intercept = TRUE) + geom_vline(xintercept = 0, lty = 2) #+ xlim(-5,5) -->
+<!-- ``` -->
+
+<!-- ### Make bootstrap confidence intervals (like in forestTrends R package)  -->
+<!-- ```{r} -->
+<!--  plots <- data.frame(unique(datAll_std[,"unitName"])) -->
+<!-- species <- data.frame(unique(datAll_std[,"scientificName"])) -->
+<!-- chatty <- T -->
+<!-- num_reps <-  100 -->
+
+<!--   real_mod <- (case_boot_sample_MINE(datAll_std, x = "year", y = "confirmedOzoneInjury", ID = "unitName", sample = F, sample_num = 1, -->
+<!--                                                 group = unitName, -->
+<!--                                                 random_type = "custom", random_formula = "(1|unitName) + (1|scientificName)", -->
+<!--                                                 random_cols = "scientificName",  -->
+<!--                                                 model_type = 'glmmTMB') |> -->
+<!--                                dplyr::select(-boot_num)) -->
+<!--   try(real_mod <-  real_mod |> dplyr::select(-isSingular)) -->
+
+
+<!--     boot_mod <- -->
+<!--       suppressWarnings(purrr::map(seq_len(num_reps), -->
+<!--                                      ~case_boot_sample_MINE(datAll_std, x = "year", y = "confirmedOzoneInjury", ID = "unitName",  -->
+<!--                                                        sample = T, sample_num = .x, -->
+<!--                                                        group = unitName, -->
+<!--                                                 random_type = "custom", random_formula = "(1|unitName) + (1|scientificName)", -->
+<!--                                                 random_cols = "scientificName",  -->
+<!--                                                 model_type = 'glmmTMB'), .progress = chatty) |> -->
+<!--                        purrr::list_rbind() |> -->
+<!--       tidyr::pivot_wider(names_from = term, values_from = estimate)) |>  data.frame() -->
+
+
+<!--     boot_CIs <- data.frame(t(apply(boot_mod |> dplyr::select(-boot_num), 2, -->
+<!--                                    quantile, probs = c(0.025, 0.975), na.rm = T)))#, -->
+<!--                            #num_boots = sum((ifelse(is.na(x), 0, 1)))) -->
+<!--                            #num_boots_sing = sum(boot_mod$isSingular, na.rm = T)) -->
+
+<!--     # num_boot_sing <- unique(boot_CIs$num_boots_sing) -->
+<!--     # num_boot_fail <- num_reps - max(boot_CIs$num_boots) -->
+<!--     #  -->
+<!--     # if(num_boot_fail == 0 & num_boot_sing > 0){ -->
+<!--     #   warning(paste0("Singular fits occurred in ", num_boot_sing, " bootstrapped samples, but all models returned fits."))} -->
+<!--     #  -->
+<!--     # if(num_boot_fail > 0 & num_boot_sing > 0){ -->
+<!--     #   warning(paste0("Singular fits occurred in ", num_boot_sing, " bootstrapped samples, and ", num_boot_fail, -->
+<!--     #                " bootstrapped samples failed to return a model fit."))} -->
+<!--     #  -->
+<!--     # if(num_boot_fail > 0 & num_boot_sing == 0){ -->
+<!--     #   warning(paste0(num_boot_fail, " bootstrapped samples failed to return a model fit."))} -->
+
+<!--     boot_CIs$term <- rownames(boot_CIs) -->
+<!--     boot_CIs <- boot_CIs #|>  dplyr::select(-num_boots_sing) -->
+
+<!--     colnames(boot_CIs) <- c("lower95", "upper95", #"num_boots",  -->
+<!--                             "term") -->
+
+<!--  ## CIs for estimates and prediction intervals for response (across all) sites and species -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- modelPreds <- real_mod |>  -->
+<!--   slice(3:nrow(real_mod)) |>  -->
+<!--   rename(confirmedOzoneInjury =estimate) |>  -->
+<!--   mutate(year = as.integer(str_extract(term, pattern = "[0-9]+"))) |>  -->
+<!--   left_join(boot_CIs |> slice(3:nrow(boot_CIs))) -->
+<!-- ggplot() +  -->
+<!--   #geom_point(data = datAll_std, aes(x = year, y = jitter(confirmedOzoneInjury), col = unitName)) +  -->
+<!--   geom_ribbon(data = modelPreds, aes(x = year, ymin = lower95, ymax = upper95)) + -->
+<!--   geom_point(data = modelPreds, aes(x = year, y = confirmedOzoneInjury)) +  -->
+<!--   geom_line(data = modelPreds, aes(x = year, y = ((1)/(1 + exp(-(493.4503 + -0.2484 * year)) )))) -->
+
+<!-- ``` -->
+
+<!-- ### Now, generate prediction intervals around the predictions of the model  -->
+
+
+<!-- Potential challenges:  -->
+<!-- - uneven sampling years across parks/units (plots are sampled on a panel design) -->
+<!-- - park name and year of data collection might be correlated due to the panel design -->
+
+<!-- # comparing rates of ozone injury by species  -->
+<!--   Potential challenges:  -->
+<!--     - non-independence of data (violates assumption of ANOVA)  -->
+<!--     - could use a Kruskal-Wallis test, which is non-parametric? -->
+<!-- # Comparing data collected using the "standard" protocol to data collected using the "QA/QC" protocol -->
+
+<!-- # Comparing field identification of ozone foliar injury to the expert classification of voucher specimens -->
