@@ -16,7 +16,7 @@ All NPS units in the Cumberland Piedmont Inventory and Monitoring Network (CUPN)
 
 ```{r, include=FALSE}
 ## Load packages
-packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed", "datawizard", "performance", "see", "lmerTest")
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed", "datawizard", "performance", "see", "lmerTest", "purrr")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
@@ -68,8 +68,45 @@ The Ozone exposure index for vegetation is the "3-month maximum 12-hour W126 ind
 
 ### Calculating 5-year average ozone index for parks with on-site, yearly monitoring
 ```{r}
+#| echo: false
+# get the yearly data
+ozoneDat_yearly <- ozoneDat |> 
+  filter(ozoneExposureIndexType == "yearly")
 
+# calculate the 5-year moving average for each site
+ozoneDat_yearlyTo5yr <- purrr::map(unique(ozoneDat_yearly$unitCode), .f = function(x) {
+ ozoneDat_yearly |> 
+    filter(unitCode == x) |>  
+    mutate(
+    movingAvgOzoneIndex = stats::filter(ts(ozoneExposureIndexForVegetation), filter = rep(1/5, 5), sides = 1  )
+    ) 
+} ) |> 
+    purrr::list_c() |> 
+  mutate(ozoneExposureIndexType = "average of previous 5 years inclusive of current year") |> 
+  select(-ozoneExposureIndexForVegetation) |> 
+  rename(ozoneExposureIndexForVegetation = movingAvgOzoneIndex) |> 
+  select(names(ozoneDat))
+
+# add back into the ozone data frame
+ozoneDat <- ozoneDat |> 
+  rbind(ozoneDat_yearlyTo5yr)
 ```
+
+```{r}
+#| fig-height: 10
+#| fig-width: 8
+# plot of number of individual plants w/ and without ozone by year across all park units
+ozoneDat |>
+  ggplot() +
+  facet_wrap(~unitName, ncol = 2) +
+  geom_line(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType))+
+  geom_point(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType)) + 
+  xlim(2007, NA) + 
+  scale_color_discrete(labels = c("Avg. over previous 5 years", "Yearly"))
+ 
+  
+```
+
 
 
 
