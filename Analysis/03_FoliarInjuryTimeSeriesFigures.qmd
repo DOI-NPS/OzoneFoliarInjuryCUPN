@@ -16,7 +16,7 @@ All NPS units in the Cumberland Piedmont Inventory and Monitoring Network (CUPN)
 
 ```{r, include=FALSE}
 ## Load packages
-packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed", "datawizard", "performance", "see", "lmerTest", "purrr")
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed", "datawizard", "performance", "see", "lmerTest", "purrr", "patchwork")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
@@ -66,7 +66,7 @@ Note that for the below plots, we only show information collected during "standa
 ## Ozone Exposure Index for Vegetation
 The Ozone exposure index for vegetation is the "3-month maximum 12-hour W126 index that occurs during the growing season (March–September), measured in parts per million-hours (ppm-hrs). The W126 index is a biologically relevant measure that preferentially weights the higher ozone concentrations more likely to cause plant damage." This definition and the ozone index values come from the NPS Air Quality in Parks [website](https://www.nps.gov/subjects/air/park-conditions-trends.htm). There are yearly data collected on site for some park units. For others, there is an interpolated average index for each year, interpolates values from nearby stations and averages them over the previous five years (inclusive of the "current" year). For parks with on-site data collection, we also calculate a five year average index to allow us to compare values across all parks in the sampling protocol. 
 
-### Calculating 5-year average ozone index for parks with on-site, yearly monitoring
+Below, we calculate the 5-year average ozone index for parks with on-site, yearly monitoring
 ```{r}
 #| echo: false
 # get the yearly data
@@ -90,23 +90,46 @@ ozoneDat_yearlyTo5yr <- purrr::map(unique(ozoneDat_yearly$unitCode), .f = functi
 # add back into the ozone data frame
 ozoneDat <- ozoneDat |> 
   rbind(ozoneDat_yearlyTo5yr)
+
+# make relevant info into ordered factors
+ozoneDat <- ozoneDat |> 
+  mutate(ozoneDataCollectionType = factor(ozoneDataCollectionType, ordered = TRUE, 
+                                          levels = c("on-site sensor", "interpolated")),
+         ozoneExposureIndexType = factor(ozoneExposureIndexType, ordered = TRUE, 
+                                          levels = c("yearly", "average of previous 5 years inclusive of current year")))
+
+# save plotting info as variables 
+ozoneDataCollection_lu <- data.frame("ozoneDataCollectionType" = unique(ozoneDat$ozoneDataCollectionType), 
+                              "ozoneDataCollectionType_shape" = factor(c(16, 17), ordered = TRUE))
+ozoneExposure_lu <- data.frame( 
+                              "ozoneExposureIndexType" = unique(ozoneDat$ozoneExposureIndexType), 
+                              "ozoneExposureIndexType_color" = factor(c("#009900FF", "#990099FF"), ordered = TRUE), 
+                              "ozoneExposureIndexType_plotName" = factor(c("Yearly", "Avg. over previous \n5 years"), ordered = TRUE))
+
+ozoneDat <- ozoneDat |> 
+  left_join(ozoneDataCollection_lu) |> 
+  left_join(ozoneExposure_lu)
 ```
 
 ```{r}
 #| fig-height: 10
 #| fig-width: 8
+
+
 # plot of number of individual plants w/ and without ozone by year across all park units
 ozoneDat |>
+  filter(year > 2006) |> 
   ggplot() +
   facet_wrap(~unitName, ncol = 2) +
   geom_line(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType))+
-  geom_point(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType)) + 
+  geom_point(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType, pch = ozoneDataCollectionType)) + 
   xlim(2007, NA) + 
-  scale_color_discrete(labels = c("Avg. over previous 5 years", "Yearly"))
- 
-  
+  scale_color_discrete(labels = as.character(unique(ozoneDat$ozoneExposureIndexType_plotName)) , name = "Index Type", palette = as.character(unique(ozoneDat$ozoneExposureIndexType_color)),
+                       guide = guide_legend(override.aes = list(pch = NA, linewidth = 1.5))) + 
+  scale_shape_manual(name = "Source of Ozone Data", values = as.integer(as.character(unique(ozoneDat$ozoneDataCollectionType_shape)))) +
+  labs(title = "Ozone exposure index for vegetation at CUPN parks during \nyears with foliar injury monitoring",
+       x = "Year", y = "Ozone exposure index for vegetation, ppm-hrs") 
 ```
-
 
 
 
@@ -186,6 +209,7 @@ datAll_std |>
 :::
 ----------------
 
+
 ## Presence and rate of  *suspected* ozone foliar injury by park unit across time...
 
 
@@ -194,30 +218,71 @@ datAll_std |>
 ```{r}
 #| fig-height: 10
 #| fig-width: 8
-# plot of number of individual plants w/ and without ozone by year across all park units
-datAll_std |>
+
+parkNames <- unique(datAll_std$unitName)
+suspectedOzoneFigsByPark <- vector(length = length(parkNames), mode = "list")
+for (i in seq_along(parkNames)) {
+  numOzone_i <- datAll_std |>
+    filter(unitName == parkNames[i]) |> 
   ggplot() +
-  facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
+  #facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
   geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode_bin)), width = 0.9) +
   guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) +
   theme(palette.fill.discrete = c("#332288", "#DDCC77", "#44AA99")) +
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Number of Individual Plants",
-        title = "Number of individual plants with and without suspected ozone \nfoliar injury, by park unit")+
+        title = "Number of individual plants with and without suspected ozone \nfoliar injury")+
     xlim(c(min(datAll$year), max(datAll$year)))
 
 
 # plot of proportion of individual plants w/ and without ozone by year across all park units
-datAll_std |>
+rateOzone_i <- datAll_std |>
+    filter(unitName == parkNames[i]) |> 
   ggplot() +
-  facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
+  #facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
   geom_bar(aes(x = as.integer(year), fill = as.factor(damageAmountCode_bin)), position = "fill", width = 0.9) +
   guides(fill = guide_legend("Presence of \nOzone Foliar \nInjury")) +
   theme(palette.fill.discrete = c("#332288", "#DDCC77", "#44AA99")) +
   scale_fill_discrete(labels = c("No", "Yes", "Inconclusive")) +
   labs(x = "Year", y = "Proportion of sampled plants",
-        title = "Rate of suspected ozone \nfoliar injury, by park unit")+
+        title = "Rate of suspected ozone foliar injury")+
     xlim(c(min(datAll$year), max(datAll$year)))
+
+# plot of ozone indices
+ozoneDat_i <- ozoneDat |>
+  filter(unitName == parkNames[i]) |> 
+  filter(year > 2007) 
+ozone_i <- ozoneDat_i |> 
+  ggplot() +
+  #facet_wrap(~unitName, ncol = 2) +
+  geom_line(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType))+
+  geom_point(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType, pch = ozoneDataCollectionType)) + 
+    xlim(c(min(datAll$year), max(datAll$year)))+ 
+    scale_color_discrete(labels = as.character(unique(ozoneDat$ozoneExposureIndexType_plotName)) , name = "Index Type", palette = as.character(unique(ozoneDat$ozoneExposureIndexType_color)),
+                       guide = guide_legend(override.aes = list(pch = NA, linewidth = 1.5))) + 
+  scale_shape_manual(name = "Source of Ozone Data", values = as.integer(as.character(unique(ozoneDat$ozoneDataCollectionType_shape)))) +
+  labs(title = "Ozone exposure index for vegetation", 
+       x = "Year", y = "Ozone exposure index for vegetation \nppm-hrs")
+
+library(patchwork)
+  suspectedOzoneFigsByPark[[i]] <- (numOzone_i / rateOzone_i / ozone_i) + patchwork::plot_annotation(title = parkNames[i])
+}
+
+  suspectedOzoneFigsByPark[[1]] 
+  suspectedOzoneFigsByPark[[2]] 
+  suspectedOzoneFigsByPark[[3]] 
+  suspectedOzoneFigsByPark[[4]] 
+  suspectedOzoneFigsByPark[[5]] 
+  suspectedOzoneFigsByPark[[6]] 
+  suspectedOzoneFigsByPark[[7]] 
+  suspectedOzoneFigsByPark[[8]] 
+  suspectedOzoneFigsByPark[[9]] 
+  suspectedOzoneFigsByPark[[10]] 
+  suspectedOzoneFigsByPark[[11]] 
+  suspectedOzoneFigsByPark[[12]] 
+  suspectedOzoneFigsByPark[[13]] 
+  suspectedOzoneFigsByPark[[14]] 
+
 ```
 :::
 
@@ -390,40 +455,87 @@ datAll_std |>
 ```{r}
 #| fig-height: 10
 #| fig-width: 8
-# plot of number of individual plants w/ and without ozone by year across all park units
-datAll_std |>
-  ggplot() +
-  facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
+
+# make the damage severity code description have a column for color 
+damSevColor_lu <- data.frame("damageSeverityCodeDescription" = unique(datAll_std$damageSeverityCodeDescription) |> sort(), 
+                             "damageSeverityCodeDescription_color" = factor(c("#0F2B5FFF", "#5991C7FF","#8EC1E7FF", "#B9DBF1FF", "#D5A370FF", "#7B4F37FF"), ordered = TRUE, 
+                                                                            levels = c("#0F2B5FFF", "#5991C7FF","#8EC1E7FF", "#B9DBF1FF", "#D5A370FF", "#7B4F37FF")), 
+                             "damageSeverityCodeDescription_figNames" = factor(c("No Injury","1-6%","7-25%" ,"26-50%","51-75%",">75%"), 
+                                                                               ordered = TRUE, 
+                    levels = c("No Injury","1-6%","7-25%" ,"26-50%","51-75%",">75%")))
+datAll_std <- 
+  datAll_std |> 
+  left_join(damSevColor_lu)
+
+
+suspectedOzoneSevFigsByPark <- vector(length = length(parkNames), mode = "list")
+
+for (i in seq_along(parkNames)) {
+  datAll_i <- datAll_std |>
+    filter(unitName == parkNames[i])
+  numOzone_i <- datAll_i |> 
+    ggplot() +
+  #facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
   geom_bar(aes(x = as.integer(year), fill = as.factor(damageSeverityCodeDescription)), width = 0.9) +
   guides(fill = guide_legend("Percentage of leaf \narea or injured \nleaves with ozone \nsymptoms")) +
-  scale_fill_manual(values= c( "#0F2B5FFF", "#5991C7FF","#8EC1E7FF", "#B9DBF1FF", "#D5A370FF", "#7B4F37FF"),
-                    labels = c("No Injury",
-                    "1-6%",
-                    "7-25%" ,
-                    "26-50%",
-                    "51-75%",
-                    ">75%")) +
+  scale_fill_manual(values = as.character(unique(datAll_i$damageSeverityCodeDescription_color) |> sort()) ,
+                    labels = unique(datAll_i$damageSeverityCodeDescription_figNames) |> sort()
+                      ) +
   labs(x = "Year", y = "Number of Individual Plants",
-        title = "Number of individual plants with differing severity of ozone \nfoliar injury, by park unit")+
+        title = "Number of individual plants with differing severity of ozone foliar injury")+
     xlim(c(min(datAll$year), max(datAll$year)))
 
 
 # plot of proportion of individual plants w/ and without ozone by year across all park units
-datAll_std |>
-  ggplot() +
-  facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
+rateOzone_i <- datAll_std |>
+    filter(unitName == parkNames[i]) |> 
+ ggplot() +
+  #facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
  geom_bar(aes(x = as.integer(year), fill = as.factor(damageSeverityCodeDescription)), position = "fill", width = 0.9) +
   guides(fill = guide_legend("Percentage of leaf \narea or injured \nleaves with ozone \nsymptoms")) +
-  scale_fill_manual(values= c( "#0F2B5FFF", "#5991C7FF","#8EC1E7FF", "#B9DBF1FF", "#D5A370FF", "#7B4F37FF"),
-                    labels = c("No Injury",
-                    "1-6%",
-                    "7-25%" ,
-                    "26-50%",
-                    "51-75%",
-                    ">75%")) +
+  scale_fill_manual(values = as.character(unique(datAll_i$damageSeverityCodeDescription_color) |> sort()) ,
+                    labels = unique(datAll_i$damageSeverityCodeDescription_figNames) |> sort()
+                      ) +
   labs(x = "Year", y = "Proportion of sampled plants",
-        title = "Proportion of individual plants with differing severity of ozone \nfoliar injury, by park unit")+
+        title = "Proportion of individual plants with differing severity of ozone foliar injury")+
     xlim(c(min(datAll$year), max(datAll$year)))
+
+# plot of ozone indices
+ozoneDat_i <- ozoneDat |>
+  filter(unitName == parkNames[i]) |> 
+  filter(year > 2007) 
+ozone_i <- ozoneDat_i |> 
+  ggplot() +
+  #facet_wrap(~unitName, ncol = 2) +
+  geom_line(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType))+
+  geom_point(aes(x = year, y = ozoneExposureIndexForVegetation, col = ozoneExposureIndexType, pch = ozoneDataCollectionType)) + 
+    xlim(c(min(datAll$year), max(datAll$year)))+ 
+     scale_color_discrete(labels = as.character(unique(ozoneDat$ozoneExposureIndexType_plotName)) , name = "Index Type", palette = as.character(unique(ozoneDat$ozoneExposureIndexType_color)),
+                       guide = guide_legend(override.aes = list(pch = NA, linewidth = 1.5))) + 
+  scale_shape_manual(name = "Source of Ozone Data", values = as.integer(as.character(unique(ozoneDat$ozoneDataCollectionType_shape)))) +
+  labs(title = "Ozone exposure index for vegetation", 
+       x = "Year", y = "Ozone exposure index for vegetation \nppm-hrs")
+
+  suspectedOzoneSevFigsByPark[[i]] <- (numOzone_i / rateOzone_i / ozone_i) + patchwork::plot_annotation(title = parkNames[i])
+}
+
+  suspectedOzoneSevFigsByPark[[1]] 
+  suspectedOzoneSevFigsByPark[[2]] 
+  suspectedOzoneSevFigsByPark[[3]] 
+  suspectedOzoneSevFigsByPark[[4]] 
+  suspectedOzoneSevFigsByPark[[5]] 
+  suspectedOzoneSevFigsByPark[[6]] 
+  suspectedOzoneSevFigsByPark[[7]] 
+  suspectedOzoneSevFigsByPark[[8]] 
+  suspectedOzoneSevFigsByPark[[9]] 
+  suspectedOzoneSevFigsByPark[[10]] 
+  suspectedOzoneSevFigsByPark[[11]] 
+  suspectedOzoneSevFigsByPark[[12]] 
+  suspectedOzoneSevFigsByPark[[13]] 
+  suspectedOzoneSevFigsByPark[[14]] 
+  
+  
+  
 ```
 :::
 
@@ -433,6 +545,7 @@ datAll_std |>
 ```{r}
 #| fig-width: 8
 #| fig-height: 8
+
 
 parkNames <- unique(datAll_std$unitName)
 suspectedOzoneFigsByParkBySpp <- vector(length = length(parkNames), mode = "list")
