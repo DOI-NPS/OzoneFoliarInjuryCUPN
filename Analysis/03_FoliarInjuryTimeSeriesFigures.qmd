@@ -17,7 +17,7 @@ All NPS units in the Cumberland Piedmont Inventory and Monitoring Network (CUPN)
 
 ```{r, include=FALSE}
 ## Load packages
-packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed", "datawizard", "performance", "see", "lmerTest", "purrr", "patchwork", "dotwhisker")
+packageNames <- c( "ggplot2", "lubridate", "stringr", "ggpubr", "dplyr", "here","data.table", "remotes", "showtext", "sysfonts", "forcats", "scales", "glmmTMB", "DHARMa", "broom.mixed", "datawizard", "performance", "see", "lmerTest", "purrr", "patchwork", "dotwhisker", "tidyr")
 
 # get names of packages that still need to be installed and install them 
 install.packages(packageNames[!(packageNames %in% (installed.packages() |> rownames()))])
@@ -902,7 +902,7 @@ datAll_std <- datAll_std |>
 
 
 # make the damage severity code description have a column for color 
-damSevColor_lu <- data.frame("damageSeverityCodeDescription" = unique(datAll_std$damageSeverityCodeDescription) |> sort(), 
+damSevColor_lu <- data.frame("damageSeverityCodeDescription_confirmed" = unique(datAll_std$damageSeverityCodeDescription_confirmed) |> sort(), 
                              "damageSeverityCodeDescription_color" = factor(c("#0F2B5FFF", "#5991C7FF","#8EC1E7FF", "#B9DBF1FF", "#D5A370FF", "#7B4F37FF"), ordered = TRUE, 
                                                                             levels = c("#0F2B5FFF", "#5991C7FF","#8EC1E7FF", "#B9DBF1FF", "#D5A370FF", "#7B4F37FF")), 
                              "damageSeverityCodeDescription_figNames" = factor(c("No Injury","1-6%","7-25%" ,"26-50%","51-75%",">75%"), 
@@ -1050,7 +1050,7 @@ for (i in seq_along(parkNames)) {
   numOzone_i <- datAll_i |> 
     ggplot() +
   #facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
-  geom_bar(aes(x = as.integer(year), fill = as.factor(damageSeverityCodeDescription)), width = 0.9) +
+  geom_bar(aes(x = as.integer(year), fill = as.factor(damageSeverityCodeDescription_confirmed)), width = 0.9) +
   guides(fill = guide_legend("Percentage of leaf \narea or injured \nleaves with ozone \nsymptoms")) +
   scale_fill_manual(values = as.character(unique(datAll_i$damageSeverityCodeDescription_color) |> sort()) ,
                     labels = unique(datAll_i$damageSeverityCodeDescription_figNames) |> sort()
@@ -1065,7 +1065,7 @@ rateOzone_i <- datAll_i |>
     filter(unitName == parkNames[i]) |> 
  ggplot() +
   #facet_wrap(~unitName, ncol = 2, axes = "all_x", scales = "free_y") +
- geom_bar(aes(x = as.integer(year), fill = as.factor(damageSeverityCodeDescription)), position = "fill", width = 0.9) +
+ geom_bar(aes(x = as.integer(year), fill = as.factor(damageSeverityCodeDescription_confirmed)), position = "fill", width = 0.9) +
   guides(fill = guide_legend("Percentage of leaf \narea or injured \nleaves with ozone \nsymptoms")) +
   scale_fill_manual(values = as.character(unique(datAll_i$damageSeverityCodeDescription_color) |> sort()) ,
                     labels = unique(datAll_i$damageSeverityCodeDescription_figNames) |> sort()
@@ -1276,7 +1276,7 @@ confirmedOzoneRankings_byPark[[14]]
 
 # Trend analysis
 
-## Question 1: Is the presence of ozone foliar injury at all CUPN parks changing over the monitoring period?
+## Question 1: Is the rate of ozone foliar injury across all CUPN parks changing over the monitoring period?
 
 ### Considerations for this model
 * Fitting a model like this across all parks does decrease our ability to estimate trends at each individual park, since the variation in the effect of year across parks is pooled and estimates for the year effect at each park are drawn toward the global mean estimate. However, with so many parks that do not have enough data to fit a model on their own, this approach allows us to at least do an exploratory analysis with all of the available data. 
@@ -1291,12 +1291,6 @@ confirmedOzoneRankings_byPark[[14]]
 * I don't think the observations are temporally autocorrelated, because the presence of foliar injury in a previous year does not affect the presence of foliar injury in a subsequent year (leaves re-grow annually).
 * The fact that plots aren't sampled every year in most parks is likely not problematic, since the presence/absence of data in a given year isn't related to ozone or other drivers (i.e. the data aren't "Missing Not at Random")
 * This analysis makes the assumption that parks are assigned to panels randomly, and not using some other variable that may be confounding with ozone quantity or one of the predictors in the models.
-
-This analysis was inspired in part by code from the forestTrends R package by Kate Miller, accessed 15 October, 2026
-```{r, echo = FALSE}
-# read in functions
-source(file  = "../Functions/AnalysisFunctions.R")
-```
 
 ::: {.callout-note collapse=true icon = false}
 ### Looking at variables to determine how to construct the model
@@ -1393,7 +1387,8 @@ summary(mod1)
 (we use conditional residuals, which allow us to look at patterns in the random effects. We already know that the random effect variables are driving patterns in the response (why we include them as random effects in the first place) so we expect to see patterns in the unconditional/marginal residuals)
 We use the DHARMa R package to simulate scaled residuals ("a scaled residual value of 0.5 means that half of the simulated data are higher than the observed rate, half of them lower." -- from the DHARMa vignette). A well specified model will have scaled residuals with a uniform (flat) distribution, and will not show a directional relationship when plotted against model predictors.
 ```{r}
-
+#| fig-width: 7
+#| fig-height: 5
 # use the DHARMa package to simulate residuals and and plot the results
 mod1_resids <- DHARMa::simulateResiduals(mod1,
                                  response = TRUE, #for models with integer response
@@ -1433,11 +1428,11 @@ VarCorr(mod1) |> as.data.frame()
 There is a slightly significant KS test, which indicates that the data are perhaps not an ideal fit to the statistical distribution used in the model. The residuals do not have a significant pattern of variation across year, but there is some significant variation across park. However, the model does not appear to be over-dispersed.
 The standard deviations of the random effects aren't too close to zero, so the data are currently supporting the random effect.
 
-
-
 ### Are the random effects correlated with the predictor (year?) 
 A correlation would indicate that the random effects are absorbing some of the effects of the fixed effect structure, which would indicate that the fixed effect structure was poorly specified. 
 ```{r}
+#| fig-width: 7
+#| fig-height: 5
 # the random effects from the model
 mod1_ranEf <- ranef(mod1)
 
@@ -1495,18 +1490,21 @@ pred_df <- data.frame(term = paste0(substr("year_s", 1, 1), new_df[,"year_s"], "
                                                     type = 'response', re.form = NA))
 
 ## see if the confidence intervals have been saved yet 
-if(sum(c("fixefCI.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) == 0) {
- fixefCI <- confint(mod1, parm = "beta_", method = "boot", nsim = 500,
-        boot.type = "perc", parallel = "multicore", ncpus = 4)
+if(!sum(c("fixefCI.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) ) {
+  fixefCI_temp <- bootMer(mod1, FUN = function(x) fixef(x),
+              nsim = 100, use.u = FALSE, type = "parametric",
+              parallel = "multicore", ncpus = 4)
+
+fixefCI <- apply(fixefCI_temp$t, 2, quantile, c(0.025, 0.975), na.rm = TRUE)
+
 saveRDS(fixefCI, "../Data/intermediateDataFiles/model1_CIs/fixefCI.rds")
 } else {
   #mod1CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
   fixefCI <- readRDS("../Data/intermediateDataFiles/model1_CIs/fixefCI.rds")
 }
   
-  
 
-
+sigCol <- c("yes" = "darkblue", "no" = "darkred")
 # plot the fixed effect coefficients
  broom.mixed::tidy(mod1, effects = "fixed", conf.int = TRUE)  |>
    filter(effect == "fixed") |> 
@@ -1521,8 +1519,8 @@ saveRDS(fixefCI, "../Data/intermediateDataFiles/model1_CIs/fixefCI.rds")
    geom_vline(aes(xintercept = 0), linetype = 2) + 
    geom_point(aes(x = estimate, y = term, col = crossesZero)) + 
    geom_segment(aes(y = term, x = conf.high, xend = conf.low, col = crossesZero)) + 
-   labs(title = "Fixed effect coefficients and bootstrap CIs from the model: \nfoliarInjury ~ year_s + (1|year_f) + (1|species) + (1|plot/park)", x = "Estimate", y = "Model Term") + 
-   scale_color_discrete(name = "CI crosses zero?")
+   labs(title = "Fixed effect coefficients and bootstrap CIs from the model: \nfoliarInjury ~ year_s + (1|year_f) + (1|species) + (1|plot/park)", x = "Estimate", y = "Model Term")+ 
+   scale_color_manual(name = "CI crosses zero?", values = sigCol)
 ```
 ### Show population-level predictions 
 (These are unconditional predictions, which are predictions for a 'typical' park/plot/species) with parametric bootstrap confidence intervals
@@ -1541,7 +1539,7 @@ predFun <- function(m) predict(m, newdata = newDat,type = "response")
 
 # get 95% confidence interval 
 ## see if the bootstrap confidence intervals have been saved yet 
-if(sum(c("predBootCIs.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) == 0) {
+if(!sum(c("predBootCIs.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) ) {
 
     boot <-  bootMer(mod1, predFun, nsim = 100, re.form = NA)
 saveRDS(boot, "../Data/intermediateDataFiles/model1_CIs/predBootCIs.rds")
@@ -1590,7 +1588,7 @@ predFun2 <- function(m) predict(m, newdata = newDat2, type = "response", allow.n
 
 # get 95% confidence interval 
 ## see if the bootstrap confidence intervals have been saved yet 
-if(sum(c("predBootCIs_perPark.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) == 0) {
+if(!sum(c("predBootCIs_perPark.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) ) {
 
     boot_perPark <-  bootMer(mod1, predFun2, nsim = 100, re.form = ~(1|unitName), use.u = TRUE)
 saveRDS(boot_perPark, "../Data/intermediateDataFiles/model1_CIs/predBootCIs_perPark.rds")
@@ -1613,244 +1611,712 @@ ggplot(newDat2) +
 
 ```
 
-
-<!-- ```{r} -->
-<!-- ################ -->
-<!-- # year as factor -->
-<!-- year_f <- data.frame(unique(datAll_std$year_f)) -->
-<!-- # park unit -->
-<!-- unitName <- data.frame(unique(datAll_std[,"unitName"])) -->
-<!-- # plot name -->
-<!-- siteName <- data.frame(unique(datAll_std$siteName))  -->
-<!-- # species name -->
-<!-- scientificName <- data.frame(unique(datAll_std[,"scientificName"])) -->
-
-
-<!-- chatty <- T -->
-<!-- num_reps <-  100 -->
-
-<!--   real_mod <- (case_boot_sample_MINE(datAll_std, x = "year_s", y = "confirmedOzoneInjury",  -->
-<!--                                      ID = "unitName", sample = F, sample_num = 1, -->
-<!--                                                 group = unitName, -->
-<!--                                                 random_type = "custom",  -->
-<!--                                      random_formula = " (1 | year_f) + (1 | scientificName) +      (1 | unitName/siteName)", -->
-<!--                                                 random_cols = "scientificName", -->
-<!--                                                 model_type = 'glmer') |> -->
-<!--                                dplyr::select(-boot_num)) -->
-<!--   try(real_mod <-  real_mod |> dplyr::select(-isSingular)) -->
-
-
-<!--     boot_mod <- -->
-<!--       suppressWarnings(purrr::map(seq_len(num_reps), -->
-<!--                                      ~case_boot_sample_MINE(datAll_std, x = "year", y = "confirmedOzoneInjury", ID = "unitName", -->
-<!--                                                        sample = T, sample_num = .x, -->
-<!--                                                        group = unitName, -->
-<!--                                                 random_type = "custom", random_formula = "(1|unitName) + (1|scientificName)", -->
-<!--                                                 random_cols = "scientificName", -->
-<!--                                                 model_type = 'glmmTMB'), .progress = chatty) |> -->
-<!--                        purrr::list_rbind() |> -->
-<!--       tidyr::pivot_wider(names_from = term, values_from = estimate)) |>  data.frame() -->
-
-
-<!--     boot_CIs <- data.frame(t(apply(boot_mod |> dplyr::select(-boot_num), 2, -->
-<!--                                    quantile, probs = c(0.025, 0.975), na.rm = T)))#, -->
-<!--                            #num_boots = sum((ifelse(is.na(x), 0, 1)))) -->
-<!--                            #num_boots_sing = sum(boot_mod$isSingular, na.rm = T)) -->
-
-<!--     # num_boot_sing <- unique(boot_CIs$num_boots_sing) -->
-<!--     # num_boot_fail <- num_reps - max(boot_CIs$num_boots) -->
-<!--     # -->
-<!--     # if(num_boot_fail == 0 & num_boot_sing > 0){ -->
-<!--     #   warning(paste0("Singular fits occurred in ", num_boot_sing, " bootstrapped samples, but all models returned fits."))} -->
-<!--     # -->
-<!--     # if(num_boot_fail > 0 & num_boot_sing > 0){ -->
-<!--     #   warning(paste0("Singular fits occurred in ", num_boot_sing, " bootstrapped samples, and ", num_boot_fail, -->
-<!--     #                " bootstrapped samples failed to return a model fit."))} -->
-<!--     # -->
-<!--     # if(num_boot_fail > 0 & num_boot_sing == 0){ -->
-<!--     #   warning(paste0(num_boot_fail, " bootstrapped samples failed to return a model fit."))} -->
-
-<!--     boot_CIs$term <- rownames(boot_CIs) -->
-<!--     boot_CIs <- boot_CIs #|>  dplyr::select(-num_boots_sing) -->
-
-<!--     colnames(boot_CIs) <- c("lower95", "upper95", #"num_boots", -->
-<!--                             "term") -->
-
-<!--  ## CIs for estimates and prediction intervals for response (across all) sites and species -->
-
-<!-- modelPreds <- real_mod |> -->
-<!--   slice(3:nrow(real_mod)) |> -->
-<!--   rename(confirmedOzoneInjury =estimate) |> -->
-<!--   mutate(year = as.integer(str_extract(term, pattern = "[0-9]+"))) |> -->
-<!--   left_join(boot_CIs |> slice(3:nrow(boot_CIs))) -->
-<!-- ggplot() + -->
-<!--   #geom_point(data = datAll_std, aes(x = year, y = jitter(confirmedOzoneInjury), col = unitName)) + -->
-<!--   geom_ribbon(data = modelPreds, aes(x = year, ymin = lower95, ymax = upper95)) + -->
-<!--   geom_point(data = modelPreds, aes(x = year, y = confirmedOzoneInjury)) + -->
-<!--   geom_line(data = modelPreds, aes(x = year, y = ((1)/(1 + exp(-(493.4503 + -0.2484 * year)) )))) -->
-
-<!-- ``` -->
-
-<!-- ### Now, generate prediction intervals around the predictions of the model -->
-
-
-<!-- Potential challenges: -->
-<!-- - uneven sampling years across parks/units (plots are sampled on a panel design) -->
-<!-- - park name and year of data collection might be correlated due to the panel design -->
-
-<!-- # comparing rates of ozone injury by species -->
-<!--   Potential challenges: -->
-<!--     - non-independence of data (violates assumption of ANOVA) -->
-<!--     - could use a Kruskal-Wallis test, which is non-parametric? -->
-<!-- # Comparing data collected using the "standard" protocol to data collected using the "QA/QC" protocol -->
-
-<!-- # Comparing field identification of ozone foliar injury to the expert classification of voucher specimens -->
-
-
 ### Interpretive takeaways
-* When looking across all parks collectively, there is a negative trend in the presence of confirmed ozone foliar injury across the study period, although the effect is not significant (the CI of the year estimate crosses zero). 
+* When looking across all parks collectively, there is a negative trend in the presence of confirmed ozone foliar injury across the study period, but the effect is NOT significant (the CI of the year estimate crosses zero). 
 * There are different degrees of decrease (i.e. the y-intercept of the trend is different) in the presence of confirmed ozone foliar injury when we look at the park-level effects, although these effects are shrunken toward the mean effect across all parks due to the model structure. The data could not support a model with a random intercept for year, which would have allowed for different *rates* of change across parks rather than just different intercepts for the trend across parks. 
 
-## Question 2: Is the presence of ozone foliar injury at each CUPN park changing over time? 
+## Question 2: Is the rate of ozone foliar injury at each CUPN park changing over time? 
 
 ### Considerations: 
 * We do not have adequate data to fit models for many parks, particularly for those parks that only have two visits or that have no observations of confirmed foliar injury. 
-* For those parks that do have a 
+    * These are the parks that we can't fit a model for: 
+        - "Fort Donelson National Military Park" (no variation in response)
+        - "Abraham Lincoln Birthplace National Historic Site" (no variation in response)
+        - "Chickamauga & Chattanooga National Military Park" (no variation in response)
+        - "Cowpens National Battlefield" (only 2 years)
+        - "Carl Sandburg Home National Historic Site" (only 2 years)       
+        - "Guilford Courthouse National Military Park" (only 2 years)       
+        - "Kings Mountain National Military Park" (only 2 years)            
+        - "Ninety Six National Historic Site" (only 2 years)  
+* For those parks that do have enough data, we will fit a generalized linear mixed model with random effects using the lme4::glmer() function. The models will follow this same general structure: confirmedOzoneInjury ~ year_s + (1|year_f) + (1|scientificName) + (1|siteName). 
+    * If there is only one site in a park, then the (1|siteName) term will be dropped
+    * If there are 3 years of data, then the (1|year_f) term will be dropped
+    * We will use a binomial GLM since the response (confirmedOzoneInjury) is binary
+    * The same logic as described above applies for using the other random intercepts
+* While we fit models for all parks with enough data for models to converge, *the model for Mammoth Cave National Park is really the only one where the model fit is decent*
 
-
-
-### Fit a generalized linear mixed model with a random effect for plot name and a random effect for species.
-<!-- However, a model with the full dataset does not converge, likely because there are quite a few species for which there are only a few observations. In this model, we've removed species for which we have fewer than 20 observations -->
+### Fit a generalized linear mixed model for each park with enough data
 ```{r}
-# random effect for site and random effect for species (there is variation in the starting amount of foliar injury, and the change in rate of foliar injury over time is different for each species at each site )
-# try setting REML to "true" ()
-mod2 <- glmer(data = datAll_std, formula = confirmedOzoneInjury ~ year_s*unitName  + (1|year_f)
-              + (1|scientificName) + (1|unitName:siteName), family = binomial(link = "logit"), control=glmerControl(optimizer="bobyqa"))
+# function to fit models
+fitModel_byPark <- function(data, includeSiteEffect = TRUE, includeYearFactor = TRUE) {
+  
+  if(includeYearFactor == TRUE) {
+    if(includeSiteEffect == TRUE) {
+    formula <- as.formula(confirmedOzoneInjury ~ year_s + (1|year_f) + (1|scientificName) + (1|siteName))
+  } else {
+    formula <- as.formula(confirmedOzoneInjury ~ year_s + (1|year_f) + (1|scientificName))
+  }
+  } else {
+    if(includeSiteEffect == TRUE) {
+    formula <- as.formula(confirmedOzoneInjury ~ year_s +  (1|scientificName) + (1|siteName))
+  } else {
+    formula <- as.formula(confirmedOzoneInjury ~ year_s +  (1|scientificName))
+  }
+  }
+    
+  glmer(data = data, formula = formula, family = binomial(link = "logit"), control=glmerControl(optimizer="bobyqa"))
+}
 
-summary(mod2)
+# parks for which we will NOT fit models 
+#"Fort Donelson National Military Park" (no variation)
+# "Abraham Lincoln Birthplace National Historic Site" (no variation)
+#"Chickamauga & Chattanooga National Military Park" (no variation)
+# ""Cowpens National Battlefield"" (only2 years)
+# "Carl Sandburg Home National Historic Site" (only 2 years)       
+# "Guilford Courthouse National Military Park" (only 2 years)       
+# "Kings Mountain National Military Park" (only 2 years)            
+# "Ninety Six National Historic Site" (only 2 years)  
 
+# get data for all other parks 
+datParkMod <- datAll_std |> 
+  filter(!(unitName %in% c("Fort Donelson National Military Park", "Chickamauga & Chattanooga National Military Park", "Abraham Lincoln Birthplace National Historic Site", "Carl Sandburg Home National Historic Site",  "Guilford Courthouse National Military Park",  "Kings Mountain National Military Park" , "Ninety Six National Historic Site","Cowpens National Battlefield")))
+
+# determine for each park whether we want a site random intercept or not
+# how many sites per park 
+parkAndSite <- datParkMod |> 
+  select(unitName, siteName) |> 
+  unique() |> 
+  select(unitName) |> 
+  table() |> 
+  as.data.frame()
+# if there are more than 1 sites per park, then set includeSiteEffect to TRUE
+parkAndSite$includeSiteEffect <- FALSE
+parkAndSite[parkAndSite$Freq > 1, "includeSiteEffect"] <- TRUE
+  
+# if there are 3 or fewer years of data, exclude random effect of year as a factor
+parkAndYear <- datParkMod |> 
+  select(unitName, year) |> 
+  unique() |> 
+  select(unitName) |> 
+  table() |> 
+  as.data.frame() |> 
+  rename(NumYear = Freq)
+parkAndSite <- parkAndSite |> 
+  left_join(parkAndYear, by = "unitName")
+# if there are more than 1 sites per park, then set includeSiteEffect to TRUE
+parkAndSite$includeYearFactor <- FALSE
+parkAndSite[parkAndSite$NumYear > 3, "includeYearFactor"] <- TRUE
+
+
+# fit models
+mods_byPark <- purrr::map(unique(datParkMod$unitName), function(x) {
+  dat_x <- datParkMod |> 
+    filter(unitName == x)
+  mod_x <- fitModel_byPark(data = dat_x, includeSiteEffect = parkAndSite[parkAndSite$unitName == x,  "includeSiteEffect"], includeYearFactor = parkAndSite[parkAndSite$unitName == x, "includeYearFactor"])
+  return(mod_x)
+})
+names(mods_byPark) <- unique(datParkMod$unitName)
+```
+### Below, we look at model fit and predictions for each park to which we were able to fit a model
+
+
+::: {.callout-note collapse=true icon = false}
+#### Mammoth Cave National Park
+Model summary: 
+```{r}
+summary(mods_byPark[[1]])
 ```
 
-### Look at patterns in simulated residuals
-(we use conditional residuals, which allow us to look at patterns in the random effects. We already know that the random effect variables are driving patterns in the response (why we include them as random effects in the first place) so we expect to see patterns in the unconditional/marginal residuals)
-We use the DHARMa R package to simulate scaled residuals ("a scaled residual value of 0.5 means that half of the simulated data are higher than the observed rate, half of them lower." -- from the DHARMa vignette). A well specified model will have scaled residuals with a uniform (flat) distribution, and will not show a directional relationship when plotted against model predictors.
+Is the fit singular? 
 ```{r}
+isSingular(mods_byPark[[1]])
+```
+
+Look at patterns in simulated residuals
+```{r}
+#| fig-width: 7
+#| fig-height: 5
 
 # use the DHARMa package to simulate residuals and and plot the results
-mod2_resids <- DHARMa::simulateResiduals(mod2,
+mods_byPark_i_resids <- DHARMa::simulateResiduals(mods_byPark[[1]],
                                  response = TRUE, #for models with integer response
                                  simulateREs = "conditional" # re-simulates both random and fixed effects
                                  )
-plot(mod2_resids)
+plot(mods_byPark_i_resids)
 
 # plot residuals against year
-plotResiduals(mod2_resids, form = ~year_s)
+plotResiduals(mods_byPark_i_resids, form = ~year_s)
 
 # plot residuals against year as a factor
-plotResiduals(mod2_resids, form = ~year_f)
+plotResiduals(mods_byPark_i_resids, form = ~year_f)
 
 # plot residuals against species
-plotResiduals(mod2_resids, form= ~scientificName)
-# plot residuals against plot
-plotResiduals(mod2_resids, form= ~siteName, )
-# plot residuals against park
-plotResiduals(mod2_resids, form= ~unitName)
+plotResiduals(mods_byPark_i_resids, form= ~scientificName)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[1]], "includeSiteEffect"]) {
+# plot residuals against plot (if included in the model)
+plotResiduals(mods_byPark_i_resids, form= ~siteName)
+}
 
 # look at the dispersion of the model
-testDispersion(mod2_resids, plot = TRUE)
+testDispersion(mods_byPark_i_resids, plot = TRUE)
 
 # look at the dispersion of the model according to species
-testDispersion(recalculateResiduals(mod2_resids, group = ~scientificName), plot = TRUE)
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~scientificName), plot = TRUE)
 
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[1]], "includeSiteEffect"]) {
 # look at the dispersion of the model according to plot
-testDispersion(recalculateResiduals(mod2_resids, group = ~siteName), plot = TRUE)
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~siteName), plot = TRUE)
+}
 
-# look at the dispersion of the model according to park
-testDispersion(recalculateResiduals(mod2_resids, group = ~unitName), plot = TRUE)
 
 ## what is the correlation between the random effect terms? what is the standard deviation?
-VarCorr(mod2) |> as.data.frame()
+VarCorr(mods_byPark[[1]]) |> as.data.frame()
 ```
 
-There is a slightly significant KS test, which indicates that the data are perhaps not an ideal fit to the statistical distribution used in the model. The residuals do not have a significant pattern of variation across year, but there is some significant variation across park. However, the model does not appear to be over-dispersed.
-The standard deviations of the random effects aren't too close to zero, so the data are currently supporting the random effect.
-
-
-
-### Are the random effects correlated with the predictor (year?) 
-A correlation would indicate that the random effects are absorbing some of the effects of the fixed effect structure, which would indicate that the fixed effect structure was poorly specified. 
+Are the random effects correlated with the predictor (year?) 
 ```{r}
+#| fig-width: 7
+#| fig-height: 5
 # the random effects from the model
-mod2_ranEf <- ranef(mod2)
+mods_byPark_i_ranEf <- ranef(mods_byPark[[1]])
 
 # is the species random effect correlated with the predictor?
-y <- aggregate(year_s ~ scientificName, FUN = mean, data = datAll_std)
+y <- aggregate(year_s ~ scientificName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[1],])
 
-plot(mod2_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year")
-abline(lm(mod2_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red")
-text(paste0("corr=",round(cor(x = mod2_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),
+plot(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year")
+abline(lm(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),
      x = 0.8,
      y = 3)
 
 
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[1]], "includeSiteEffect"]) {
 # is the site random effect correlated with the predictor?
-y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datAll_std)
+y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[1],])
 
-plot(mod2_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year")
-abline(lm(mod2_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red")
-text(paste0("corr=",round(cor(x = mod2_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),
+plot(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year")
+abline(lm(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),
      x = 0.35,
      y = 2.5)
-
-# is the park random effect correlated with the predictor?
-y3 <- aggregate(year_s ~ unitName, FUN = mean, data = datAll_std)
-
-plot(mod2_ranEf$unitName$`(Intercept)` ~ y3$year_s, xlab = "mean value of year (scaled) for each level of the park random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of park random effect with year")
-abline(lm(mod2_ranEf$unitName$`(Intercept)` ~ y3$year_s), col = "red")
-text(paste0("corr=",round(cor(x = mod2_ranEf$unitName$`(Intercept)`, y = y3$year_s), 4)),
-     x = 0.35,
-     y = 0.5)
+}
 
 # is the factor(year) random effect correlated with the predictor?
-y4 <- aggregate(year_s ~ year_f, FUN = mean, data = datAll_std)
+y4 <- aggregate(year_s ~ year_f, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[1],])
 
-plot(mod2_ranEf$year_f$`(Intercept)` ~ y4$year_s, xlab = "mean value of year (scaled) for each level of the factor(year) random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of factor(year) random effect with year")
-abline(lm(mod2_ranEf$year_f$`(Intercept)` ~ y4$year_s), col = "red")
-text(paste0("corr=",round(cor(x = mod2_ranEf$year_f$`(Intercept)`, y = y4$year_s), 4)),
+plot(mods_byPark_i_ranEf$year_f$`(Intercept)` ~ y4$year_s, xlab = "mean value of year (scaled) for each level of the factor(year) random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of factor(year) random effect with year")
+abline(lm(mods_byPark_i_ranEf$year_f$`(Intercept)` ~ y4$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$year_f$`(Intercept)`, y = y4$year_s), 4)),
      x = 0.8,
      y = 3)
 
 
 ```
-There are weak correlations between the random effects and year (scaled), but they are weak enough I think to not be problematic.
 
-### Model coefficients and confidence intervals
-We show bootstrap percentile confidence intervals for fixed effects, which are calculated using the lme4::confint() function
+Model coefficients and bootstrap confidence intervals
 ```{r}
-mod_df <- broom.mixed::tidy(mod2) |>
-  dplyr::filter(effect == 'fixed') |>
-      dplyr::select(term, estimate) |> data.frame()
-
-new_df <- data.frame("year_s" = sort(unique(mod2@frame$year_s)))
-pred_df <- data.frame(term = paste0(substr("year_s", 1, 1), new_df[,"year_s"], "_response"),
-                          estimate = stats::predict(mod2, newdata = new_df,
-                                                    type = 'response', re.form = NA))
-
 ## see if the confidence intervals have been saved yet 
-if(sum(c("fixefCI.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) == 0) {
- fixefCI <- confint(mod2, parm = "beta_", method = "boot", nsim = 500,
-        boot.type = "perc", parallel = "multicore", ncpus = 4)
-saveRDS(fixefCI, "../Data/intermediateDataFiles/model1_CIs/fixefCI.rds")
+if(!sum(paste0("fixefCI_",stringr::str_remove_all(names(mods_byPark)[1], " "),".rds") %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+ fixefCI_temp <- bootMer(mods_byPark[[1]], FUN = function(x) fixef(x),
+              nsim = 100, use.u = FALSE, type = "parametric",
+              parallel = "multicore", ncpus = 4)
+
+fixefCI <- apply(fixefCI_temp$t, 2, quantile, c(0.025, 0.975), na.rm = TRUE)
+
+saveRDS(fixefCI, paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[1], " "),".rds"))
 } else {
   #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
-  fixefCI <- readRDS("../Data/intermediateDataFiles/model1_CIs/fixefCI.rds")
+  fixefCI <- readRDS( paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[1], " "),".rds"))
 }
   
+
+sigCol <- c("yes" = "darkblue", "no" = "darkred")
+# plot the fixed effect coefficients
+ broom.mixed::tidy(mods_byPark[[1]], effects = "fixed", conf.int = TRUE)  |>
+   filter(effect == "fixed") |> 
+   select(-conf.low, -conf.high) |> 
+   left_join(data.frame("term" = c("(Intercept)", "year_s"), "conf.low" = c(fixefCI[,1]), 
+                        "conf.high" = fixefCI[,2])) |> 
+   #transform(term=sprintf("%s.%s", term)) |>
+   mutate(model = "mod2",
+          crossesZero = "no") |>
+   mutate(crossesZero = replace(crossesZero, conf.high > 0  & conf.low < 0, "yes")) |> 
+   ggplot() + 
+   geom_vline(aes(xintercept = 0), linetype = 2) + 
+   geom_point(aes(x = estimate, y = term, col = crossesZero)) + 
+   geom_segment(aes(y = term, x = conf.high, xend = conf.low, col = crossesZero)) + 
+   labs(title = "Fixed effect coefficients and bootstrap CIs from the model", x = "Estimate", y = "Model Term") + 
+   scale_color_manual(name = "CI crosses zero?", values = sigCol)
+```
+
+Show population-level predictions 
+(These are unconditional predictions, which are predictions for a 'typical' plot/species) with parametric bootstrap confidence intervals
+```{r}
+# set up the prediction data.frame
+yr_mean <- mean(datAll_std$year)
+yr_sd <- sd(datAll_std$year)   # from the UNSCALED year variable from the data frame used to fit the model, so that the scaling factors are the same here as they were for creating the year_s variable used ot fit the model
+
+newDat <- data.frame(year = seq(min(datParkMod[datParkMod$unitName == names(mods_byPark)[1],]$year), max(datParkMod[datParkMod$unitName == names(mods_byPark)[1],]$year), length.out = 50))
+newDat$year_s <- (newDat$year - yr_mean) / yr_sd
+newDat$siteName       <- datParkMod[datParkMod$unitName == names(mods_byPark)[1],]$siteName[1]
+newDat$scientificName <- datParkMod[datParkMod$unitName == names(mods_byPark)[1],]$scientificName[1]
+newDat$year_f         <- datParkMod[datParkMod$unitName == names(mods_byPark)[1],]$year_f[1]
+# generate predictions (w/ all intercepts at their mean)
+newDat$pred <- predict(mods_byPark[[1]], newdata = newDat, re.form = NA, type = "response")
+
+# now, calculate CIs 
+predFun <- function(m) predict(m, newdata = newDat,re.form = NA, type = "response")
+
+# get 95% confidence interval 
+## see if the bootstrap confidence intervals have been saved yet 
+if(!sum(c(paste0("predBootCIs_", stringr::str_remove_all(names(mods_byPark)[1], " "),".rds")) %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+
+    boot <-  bootMer(mods_byPark[[1]], predFun, nsim = 100)
+saveRDS(boot, paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[1], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  boot <- readRDS(paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[1], " "),".rds"))
+}
+
+newDat <- newDat |> 
+  cbind(confint(boot))
+
+#plot
+ggplot(newDat) + 
+  geom_ribbon(aes(x = year, ymin = `2.5 %`, ymax = `97.5 %`), fill = "grey80") +
+  geom_line(aes(x = year, y = pred)) + 
+  labs(y = "P(ozone foliar injury)", title = paste0("Predictions of ozone foliar injury at ", names(mods_byPark)[1] ,"\nfor a 'typical' plot and species"), 
+       subtitle = "95% parametric bootstrap confidence interval shown in grey")
+
+```
+
+Interpretive takeaways:   
+* There is a non-singular model fit for Mammoth Cave    
+* There is a negative trend in ozone foliar injury across years, but the effect is not significant (the 95% CI crosses zero)    
+
+:::
+
+::: {.callout-note collapse=true icon = false}
+#### Cumberland Gap National Historical Park
+Model summary: 
+```{r}
+summary(mods_byPark[[2]])
+```
+
+Is the fit singular? 
+```{r}
+isSingular(mods_byPark[[2]])
+```
+
+Look at patterns in simulated residuals
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+# use the DHARMa package to simulate residuals and and plot the results
+mods_byPark_i_resids <- DHARMa::simulateResiduals(mods_byPark[[2]],
+                                 response = TRUE, #for models with integer response
+                                 simulateREs = "conditional" # re-simulates both random and fixed effects
+                                 )
+plot(mods_byPark_i_resids)
+
+# plot residuals against year
+plotResiduals(mods_byPark_i_resids, form = ~year_s)
+
+# plot residuals against species
+plotResiduals(mods_byPark_i_resids, form= ~scientificName)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[2]], "includeSiteEffect"]) {
+# plot residuals against plot (if included in the model)
+plotResiduals(mods_byPark_i_resids, form= ~siteName)
+}
+
+# look at the dispersion of the model
+testDispersion(mods_byPark_i_resids, plot = TRUE)
+
+# look at the dispersion of the model according to species
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~scientificName), plot = TRUE)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[2]], "includeSiteEffect"]) {
+# look at the dispersion of the model according to plot
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~siteName), plot = TRUE)
+}
+
+
+## what is the correlation between the random effect terms? what is the standard deviation?
+VarCorr(mods_byPark[[2]]) |> as.data.frame()
+```
+
+Are the random effects correlated with the predictor (year?) 
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+# the random effects from the model
+mods_byPark_i_ranEf <- ranef(mods_byPark[[2]])
+
+# is the species random effect correlated with the predictor?
+y <- aggregate(year_s ~ scientificName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[2],])
+
+plot(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year")
+abline(lm(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),
+     x = 0.1,
+     y = 3)
+
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[2]], "includeSiteEffect"]) {
+# is the site random effect correlated with the predictor?
+y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[2],])
+
+plot(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year")
+abline(lm(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),
+     x = 0.35,
+     y = 2.5)
+}
+
+
+```
+
+Model coefficients and bootstrap confidence intervals
+```{r}
+## see if the confidence intervals have been saved yet 
+if(!sum(paste0("fixefCI_",stringr::str_remove_all(names(mods_byPark)[2], " "),".rds") %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+  fixefCI_temp <- bootMer(mods_byPark[[2]], FUN = function(x) fixef(x),
+              nsim = 100, use.u = FALSE, type = "parametric",
+              parallel = "multicore", ncpus = 4)
+
+fixefCI <- apply(fixefCI_temp$t, 2, quantile, c(0.025, 0.975), na.rm = TRUE)
+saveRDS(fixefCI, paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[2], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  fixefCI <- readRDS( paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[2], " "),".rds"))
+}
   
 
-
+sigCol <- c("yes" = "darkblue", "no" = "darkred")
 # plot the fixed effect coefficients
- broom.mixed::tidy(mod2, effects = "fixed", conf.int = TRUE)  |>
+ broom.mixed::tidy(mods_byPark[[2]], effects = "fixed", conf.int = TRUE)  |>
+   filter(effect == "fixed") |> 
+   select(-conf.low, -conf.high) |> 
+   left_join(data.frame("term" = c("(Intercept)", "year_s"), "conf.low" = c(fixefCI[,1]), 
+                        "conf.high" = fixefCI[,2])) |> 
+   #transform(term=sprintf("%s.%s", term)) |>
+   mutate(model = "mod2",
+          crossesZero = "no") |>
+   mutate(crossesZero = replace(crossesZero, conf.high > 0  & conf.low < 0, "yes")) |> 
+   ggplot() + 
+   geom_vline(aes(xintercept = 0), linetype = 2) + 
+   geom_point(aes(x = estimate, y = term, col = crossesZero)) + 
+   geom_segment(aes(y = term, x = conf.high, xend = conf.low, col = crossesZero)) + 
+   labs(title = "Fixed effect coefficients and bootstrap CIs from the model", x = "Estimate", y = "Model Term") + 
+   scale_color_manual(name = "CI crosses zero?", values = sigCol)
+```
+
+Show population-level predictions 
+(These are unconditional predictions, which are predictions for a 'typical' plot/species) with parametric bootstrap confidence intervals
+```{r}
+# set up the prediction data.frame
+yr_mean <- mean(datAll_std$year)
+yr_sd <- sd(datAll_std$year)   # from the UNSCALED year variable from the data frame used to fit the model, so that the scaling factors are the same here as they were for creating the year_s variable used ot fit the model
+
+newDat <- data.frame(year = seq(min(datParkMod[datParkMod$unitName == names(mods_byPark)[2],]$year), max(datParkMod[datParkMod$unitName == names(mods_byPark)[2],]$year), length.out = 50))
+newDat$year_s <- (newDat$year - yr_mean) / yr_sd
+newDat$siteName       <- datParkMod[datParkMod$unitName == names(mods_byPark)[2],]$siteName[1]
+newDat$scientificName <- datParkMod[datParkMod$unitName == names(mods_byPark)[2],]$scientificName[1]
+newDat$year_f         <- datParkMod[datParkMod$unitName == names(mods_byPark)[2],]$year_f[1]
+# generate predictions (w/ all intercepts at their mean)
+newDat$pred <- predict(mods_byPark[[2]], newdata = newDat, re.form = NA, type = "response")
+
+# now, calculate CIs 
+predFun <- function(m) predict(m, newdata = newDat,re.form = NA, type = "response")
+
+# get 95% confidence interval 
+## see if the bootstrap confidence intervals have been saved yet 
+if(!(paste0("predBootCIs_", stringr::str_remove_all(names(mods_byPark)[2], " "),".rds") %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/"))) {
+
+    boot <-  bootMer(mods_byPark[[2]], predFun, nsim = 100)
+saveRDS(boot, paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[2], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  boot <- readRDS(paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[2], " "),".rds"))
+}
+
+
+newDat <- newDat |> 
+  cbind(confint(boot))
+
+#plot
+ggplot(newDat) + 
+  geom_ribbon(aes(x = year, ymin = `2.5 %`, ymax = `97.5 %`), fill = "grey80") +
+  geom_line(aes(x = year, y = pred)) + 
+  labs(y = "P(ozone foliar injury)", title = paste0("Predictions of ozone foliar injury at ", names(mods_byPark)[2] ,"\nfor a 'typical' plot and species"), 
+       subtitle = "95% parametric bootstrap confidence interval shown in grey")
+
+```
+
+Interpretive takeaways:     
+* There is a singular model fit -- likely because the site random intercept has no variance   
+* There is a significant negative trend in ozone foliar injury across years (the 95% CI does NOT cross zero)
+
+:::
+
+::: {.callout-note collapse=true icon = false}
+#### Shiloh National Military Park
+Model summary: 
+```{r}
+summary(mods_byPark[[3]])
+```
+
+Is the fit singular? 
+```{r}
+isSingular(mods_byPark[[3]])
+```
+
+Look at patterns in simulated residuals
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+# use the DHARMa package to simulate residuals and and plot the results
+mods_byPark_i_resids <- DHARMa::simulateResiduals(mods_byPark[[3]],
+                                 response = TRUE, #for models with integer response
+                                 simulateREs = "conditional" # re-simulates both random and fixed effects
+                                 )
+plot(mods_byPark_i_resids)
+
+# plot residuals against year
+plotResiduals(mods_byPark_i_resids, form = ~year_s)
+
+# plot residuals against species
+plotResiduals(mods_byPark_i_resids, form= ~scientificName)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[3]], "includeSiteEffect"]) {
+# plot residuals against plot (if included in the model)
+plotResiduals(mods_byPark_i_resids, form= ~siteName)
+}
+
+# look at the dispersion of the model
+testDispersion(mods_byPark_i_resids, plot = TRUE)
+
+# look at the dispersion of the model according to species
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~scientificName), plot = TRUE)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[3]], "includeSiteEffect"]) {
+# look at the dispersion of the model according to plot
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~siteName), plot = TRUE)
+}
+
+
+## what is the correlation between the random effect terms? what is the standard deviation?
+VarCorr(mods_byPark[[3]]) |> as.data.frame()
+```
+
+Are the random effects correlated with the predictor (year?) 
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+# the random effects from the model
+mods_byPark_i_ranEf <- ranef(mods_byPark[[3]])
+
+# is the species random effect correlated with the predictor?
+y <- aggregate(year_s ~ scientificName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[3],])
+
+plot(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year")
+abline(lm(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),
+     x = 0.1,
+     y = 3)
+
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[3]], "includeSiteEffect"]) {
+# is the site random effect correlated with the predictor?
+y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[3],])
+
+plot(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year")
+abline(lm(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),
+     x = 0.35,
+     y = 2.5)
+}
+
+
+```
+
+Model coefficients and bootstrap confidence intervals
+```{r}
+## see if the confidence intervals have been saved yet 
+if(!sum(paste0("fixefCI_",stringr::str_remove_all(names(mods_byPark)[3], " "),".rds") %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+ fixefCI_temp <- bootMer(mods_byPark[[3]], FUN = function(x) fixef(x),
+              nsim = 100, use.u = FALSE, type = "parametric",
+              parallel = "multicore", ncpus = 4)
+
+fixefCI <- apply(fixefCI_temp$t, 2, quantile, c(0.025, 0.975), na.rm = TRUE)
+saveRDS(fixefCI, paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[3], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  fixefCI <- readRDS( paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[3], " "),".rds"))
+}
+  
+
+sigCol <- c("yes" = "darkblue", "no" = "darkred")
+# plot the fixed effect coefficients
+ broom.mixed::tidy(mods_byPark[[3]], effects = "fixed", conf.int = TRUE)  |>
+   filter(effect == "fixed") |> 
+   select(-conf.low, -conf.high) |> 
+   left_join(data.frame("term" = c("(Intercept)", "year_s"), "conf.low" = c(fixefCI[,1]), 
+                        "conf.high" = fixefCI[,2])) |> 
+   #transform(term=sprintf("%s.%s", term)) |>
+   mutate(model = "mod2",
+          crossesZero = "no") |>
+   mutate(crossesZero = replace(crossesZero, conf.high > 0  & conf.low < 0, "yes")) |> 
+   ggplot() + 
+   geom_vline(aes(xintercept = 0), linetype = 2) + 
+   geom_point(aes(x = estimate, y = term, col = crossesZero)) + 
+   geom_segment(aes(y = term, x = conf.high, xend = conf.low, col = crossesZero)) + 
+   labs(title = "Fixed effect coefficients and bootstrap CIs from the model: \nfoliarInjury ~ year_s + (1|year_f) + (1|species) + (1|plot/park)", x = "Estimate", y = "Model Term")  + 
+   scale_color_manual(name = "CI crosses zero?", values = sigCol)
+```
+
+Show population-level predictions 
+(These are unconditional predictions, which are predictions for a 'typical' plot/species) with parametric bootstrap confidence intervals
+```{r}
+# set up the prediction data.frame
+yr_mean <- mean(datAll_std$year)
+yr_sd <- sd(datAll_std$year)   # from the UNSCALED year variable from the data frame used to fit the model, so that the scaling factors are the same here as they were for creating the year_s variable used ot fit the model
+
+newDat <- data.frame(year = seq(min(datParkMod[datParkMod$unitName == names(mods_byPark)[3],]$year), max(datParkMod[datParkMod$unitName == names(mods_byPark)[3],]$year), length.out = 50))
+newDat$year_s <- (newDat$year - yr_mean) / yr_sd
+newDat$siteName       <- datParkMod[datParkMod$unitName == names(mods_byPark)[3],]$siteName[1]
+newDat$scientificName <- datParkMod[datParkMod$unitName == names(mods_byPark)[3],]$scientificName[1]
+newDat$year_f         <- datParkMod[datParkMod$unitName == names(mods_byPark)[3],]$year_f[1]
+# generate predictions (w/ all intercepts at their mean)
+newDat$pred <- predict(mods_byPark[[3]], newdata = newDat, re.form = NA, type = "response")
+
+# now, calculate CIs 
+predFun <- function(m) predict(m, newdata = newDat,re.form = NA, type = "response")
+
+# get 95% confidence interval 
+## see if the bootstrap confidence intervals have been saved yet 
+if(!sum(c(paste0("predBootCIs_", stringr::str_remove_all(names(mods_byPark)[3], " "),".rds")) %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+
+    boot <-  bootMer(mods_byPark[[3]], predFun, nsim = 100)
+saveRDS(boot, paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[3], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  boot <- readRDS(paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[3], " "),".rds"))
+}
+
+newDat <- newDat |> 
+  cbind(confint(boot))
+
+#plot
+ggplot(newDat) + 
+  geom_ribbon(aes(x = year, ymin = `2.5 %`, ymax = `97.5 %`), fill = "grey80") +
+  geom_line(aes(x = year, y = pred)) + 
+  labs(y = "P(ozone foliar injury)", title = paste0("Predictions of ozone foliar injury at ", names(mods_byPark)[3] ,"\nfor a 'typical' plot and species"), 
+       subtitle = "95% parametric bootstrap confidence interval shown in grey")
+
+```
+
+Interpretive takeaways:     
+* There is a singular model fit -- likely because the site random intercept has no variance     
+* There is a significant negative trend in ozone foliar injury across years (the 95% CI does NOT cross zero)
+
+:::
+
+::: {.callout-note collapse=true icon = false}
+#### Stones River National Battlefield
+Model summary: 
+```{r}
+summary(mods_byPark[[4]])
+```
+
+Is the fit singular? 
+```{r}
+isSingular(mods_byPark[[4]])
+```
+
+Look at patterns in simulated residuals
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+# use the DHARMa package to simulate residuals and and plot the results
+mods_byPark_i_resids <- DHARMa::simulateResiduals(mods_byPark[[4]],
+                                 response = TRUE, #for models with integer response
+                                 simulateREs = "conditional" # re-simulates both random and fixed effects
+                                 )
+plot(mods_byPark_i_resids)
+
+# plot residuals against year
+plotResiduals(mods_byPark_i_resids, form = ~year_s)
+
+# plot residuals against species
+plotResiduals(mods_byPark_i_resids, form= ~scientificName)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[4]], "includeSiteEffect"]) {
+# plot residuals against plot (if included in the model)
+plotResiduals(mods_byPark_i_resids, form= ~siteName)
+}
+
+# look at the dispersion of the model
+testDispersion(mods_byPark_i_resids, plot = TRUE)
+
+# look at the dispersion of the model according to species
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~scientificName), plot = TRUE)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[4]], "includeSiteEffect"]) {
+# look at the dispersion of the model according to plot
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~siteName), plot = TRUE)
+}
+
+
+## what is the correlation between the random effect terms? what is the standard deviation?
+VarCorr(mods_byPark[[4]]) |> as.data.frame()
+```
+
+Are the random effects correlated with the predictor (year?) 
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+# the random effects from the model
+mods_byPark_i_ranEf <- ranef(mods_byPark[[4]])
+
+# is the species random effect correlated with the predictor?
+y <- aggregate(year_s ~ scientificName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[4],])
+
+plot(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year")
+abline(lm(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),
+     x = 0.1,
+     y = 3)
+
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[4]], "includeSiteEffect"]) {
+# is the site random effect correlated with the predictor?
+y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[4],])
+
+plot(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year")
+abline(lm(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),
+     x = 0.35,
+     y = 2.5)
+}
+
+
+```
+
+Model coefficients and bootstrap confidence intervals
+```{r}
+## see if the confidence intervals have been saved yet 
+if(!sum(paste0("fixefCI_",stringr::str_remove_all(names(mods_byPark)[4], " "),".rds") %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+ fixefCI_temp <- bootMer(mods_byPark[[4]], FUN = function(x) fixef(x),
+              nsim = 100, use.u = FALSE, type = "parametric",
+              parallel = "multicore", ncpus = 4)
+
+fixefCI <- apply(fixefCI_temp$t, 2, quantile, c(0.025, 0.975), na.rm = TRUE)
+saveRDS(fixefCI, paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[4], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  fixefCI <- readRDS( paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[4], " "),".rds"))
+}
+  
+
+sigCol <- c("yes" = "darkblue", "no" = "darkred")
+# plot the fixed effect coefficients
+ broom.mixed::tidy(mods_byPark[[4]], effects = "fixed", conf.int = TRUE)  |>
    filter(effect == "fixed") |> 
    select(-conf.low, -conf.high) |> 
    left_join(data.frame("term" = c("(Intercept)", "year_s"), "conf.low" = c(fixefCI[,1]), 
@@ -1864,7 +2330,577 @@ saveRDS(fixefCI, "../Data/intermediateDataFiles/model1_CIs/fixefCI.rds")
    geom_point(aes(x = estimate, y = term, col = crossesZero)) + 
    geom_segment(aes(y = term, x = conf.high, xend = conf.low, col = crossesZero)) + 
    labs(title = "Fixed effect coefficients and bootstrap CIs from the model: \nfoliarInjury ~ year_s + (1|year_f) + (1|species) + (1|plot/park)", x = "Estimate", y = "Model Term") + 
-   scale_color_discrete(name = "CI crosses zero?")
+   scale_color_manual(name = "CI crosses zero?", values = sigCol)
+```
+
+Show population-level predictions 
+(These are unconditional predictions, which are predictions for a 'typical' plot/species) with parametric bootstrap confidence intervals
+```{r}
+# set up the prediction data.frame
+yr_mean <- mean(datAll_std$year)
+yr_sd <- sd(datAll_std$year)   # from the UNSCALED year variable from the data frame used to fit the model, so that the scaling factors are the same here as they were for creating the year_s variable used ot fit the model
+
+newDat <- data.frame(year = seq(min(datParkMod[datParkMod$unitName == names(mods_byPark)[4],]$year), max(datParkMod[datParkMod$unitName == names(mods_byPark)[4],]$year), length.out = 50))
+newDat$year_s <- (newDat$year - yr_mean) / yr_sd
+newDat$siteName       <- datParkMod[datParkMod$unitName == names(mods_byPark)[4],]$siteName[1]
+newDat$scientificName <- datParkMod[datParkMod$unitName == names(mods_byPark)[4],]$scientificName[1]
+newDat$year_f         <- datParkMod[datParkMod$unitName == names(mods_byPark)[4],]$year_f[1]
+# generate predictions (w/ all intercepts at their mean)
+newDat$pred <- predict(mods_byPark[[4]], newdata = newDat, re.form = NA, type = "response")
+
+# now, calculate CIs 
+predFun <- function(m) predict(m, newdata = newDat,re.form = NA, type = "response")
+
+# get 95% confidence interval 
+## see if the bootstrap confidence intervals have been saved yet 
+if(!sum(c(paste0("predBootCIs_", stringr::str_remove_all(names(mods_byPark)[4], " "),".rds")) %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+
+    boot <-  bootMer(mods_byPark[[4]], predFun, nsim = 100)
+saveRDS(boot, paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[4], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  boot <- readRDS(paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[4], " "),".rds"))
+}
+
+newDat <- newDat |> 
+  cbind(confint(boot))
+
+#plot
+ggplot(newDat) + 
+  geom_ribbon(aes(x = year, ymin = `2.5 %`, ymax = `97.5 %`), fill = "grey80") +
+  geom_line(aes(x = year, y = pred)) + 
+  labs(y = "P(ozone foliar injury)", title = paste0("Predictions of ozone foliar injury at ", names(mods_byPark)[4] ,"\nfor a 'typical' plot and species"), 
+       subtitle = "95% parametric bootstrap confidence interval shown in grey")
+
+```
+Interpretive takeaways: 
+* There is a singular model fit -- likely because the site random intercept has no variance
+* There is a significant negative trend in ozone foliar injury across years (the 95% CI does NOT cross zero)
+
+:::
+
+::: {.callout-note collapse=true icon = false}
+#### Little River Canyon National Preserve
+Model summary: 
+```{r}
+summary(mods_byPark[[5]])
+```
+
+Is the fit singular? 
+```{r}
+isSingular(mods_byPark[[5]])
+```
+
+Look at patterns in simulated residuals
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+# use the DHARMa package to simulate residuals and and plot the results
+mods_byPark_i_resids <- DHARMa::simulateResiduals(mods_byPark[[5]],
+                                 response = TRUE, #for models with integer response
+                                 simulateREs = "conditional" # re-simulates both random and fixed effects
+                                 )
+plot(mods_byPark_i_resids)
+
+# plot residuals against year
+plotResiduals(mods_byPark_i_resids, form = ~year_s)
+
+# plot residuals against species
+plotResiduals(mods_byPark_i_resids, form= ~scientificName)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[5]], "includeSiteEffect"]) {
+# plot residuals against plot (if included in the model)
+plotResiduals(mods_byPark_i_resids, form= ~siteName)
+}
+
+# look at the dispersion of the model
+testDispersion(mods_byPark_i_resids, plot = TRUE)
+
+# look at the dispersion of the model according to species
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~scientificName), plot = TRUE)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[5]], "includeSiteEffect"]) {
+# look at the dispersion of the model according to plot
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~siteName), plot = TRUE)
+}
+
+
+## what is the correlation between the random effect terms? what is the standard deviation?
+VarCorr(mods_byPark[[5]]) |> as.data.frame()
+```
+
+Are the random effects correlated with the predictor (year?) 
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+# the random effects from the model
+mods_byPark_i_ranEf <- ranef(mods_byPark[[5]])
+
+# is the species random effect correlated with the predictor?
+y <- aggregate(year_s ~ scientificName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[5],])
+
+plot(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year")
+abline(lm(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),
+     x = 0.1,
+     y = 3)
+
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[5]], "includeSiteEffect"]) {
+# is the site random effect correlated with the predictor?
+y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[5],])
+
+plot(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year")
+abline(lm(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),
+     x = 0.35,
+     y = 2.5)
+}
+
+
+```
+
+Model coefficients and bootstrap confidence intervals
+```{r}
+## see if the confidence intervals have been saved yet 
+if(!sum(paste0("fixefCI_",stringr::str_remove_all(names(mods_byPark)[5], " "),".rds") %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+ fixefCI_temp <- bootMer(mods_byPark[[5]], FUN = function(x) fixef(x),
+              nsim = 100, use.u = FALSE, type = "parametric",
+              parallel = "multicore", ncpus = 4)
+
+fixefCI <- apply(fixefCI_temp$t, 2, quantile, c(0.025, 0.975), na.rm = TRUE)
+saveRDS(fixefCI, paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[5], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  fixefCI <- readRDS( paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[5], " "),".rds"))
+}
+  
+sigCol <- c("yes" = "darkblue", "no" = "darkred")
+# plot the fixed effect coefficients
+ broom.mixed::tidy(mods_byPark[[5]], effects = "fixed", conf.int = TRUE)  |>
+   filter(effect == "fixed") |> 
+   select(-conf.low, -conf.high) |> 
+   left_join(data.frame("term" = c("(Intercept)", "year_s"), "conf.low" = c(fixefCI[,1]), 
+                        "conf.high" = fixefCI[,2])) |> 
+   #transform(term=sprintf("%s.%s", term)) |>
+   mutate(model = "mod2",
+          crossesZero = "no") |>
+   mutate(crossesZero = replace(crossesZero, conf.high > 0  & conf.low < 0, "yes")) |> 
+   ggplot() + 
+   geom_vline(aes(xintercept = 0), linetype = 2) + 
+   geom_point(aes(x = estimate, y = term, col = crossesZero)) + 
+   geom_segment(aes(y = term, x = conf.high, xend = conf.low, col = crossesZero)) + 
+   labs(title = "Fixed effect coefficients and bootstrap CIs from the model: \nfoliarInjury ~ year_s + (1|year_f) + (1|species) + (1|plot/park)", x = "Estimate", y = "Model Term") + 
+   scale_color_manual(name = "CI crosses zero?", values = sigCol)
+```
+
+Show population-level predictions 
+(These are unconditional predictions, which are predictions for a 'typical' plot/species) with parametric bootstrap confidence intervals
+```{r}
+# set up the prediction data.frame
+yr_mean <- mean(datAll_std$year)
+yr_sd <- sd(datAll_std$year)   # from the UNSCALED year variable from the data frame used to fit the model, so that the scaling factors are the same here as they were for creating the year_s variable used ot fit the model
+
+newDat <- data.frame(year = seq(min(datParkMod[datParkMod$unitName == names(mods_byPark)[5],]$year), max(datParkMod[datParkMod$unitName == names(mods_byPark)[5],]$year), length.out = 50))
+newDat$year_s <- (newDat$year - yr_mean) / yr_sd
+newDat$siteName       <- datParkMod[datParkMod$unitName == names(mods_byPark)[5],]$siteName[1]
+newDat$scientificName <- datParkMod[datParkMod$unitName == names(mods_byPark)[5],]$scientificName[1]
+newDat$year_f         <- datParkMod[datParkMod$unitName == names(mods_byPark)[5],]$year_f[1]
+# generate predictions (w/ all intercepts at their mean)
+newDat$pred <- predict(mods_byPark[[5]], newdata = newDat, re.form = NA, type = "response")
+
+# now, calculate CIs 
+predFun <- function(m) predict(m, newdata = newDat,re.form = NA, type = "response")
+
+# get 95% confidence interval 
+## see if the bootstrap confidence intervals have been saved yet 
+if(!sum(c(paste0("predBootCIs_", stringr::str_remove_all(names(mods_byPark)[5], " "),".rds")) %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+
+    boot <-  bootMer(mods_byPark[[5]], predFun, nsim = 100)
+saveRDS(boot, paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[5], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  boot <- readRDS(paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[5], " "),".rds"))
+}
+
+boot$t <- boot$t[!rowSums(!is.finite(boot$t)),]
+boot$R <- nrow(boot$t)
+newDat <- newDat |> 
+  cbind(confint(boot, nsim = nrow(boot$t)))
+
+#plot
+ggplot(newDat) + 
+  geom_ribbon(aes(x = year, ymin = `2.5 %`, ymax = `97.5 %`), fill = "grey80") +
+  geom_line(aes(x = year, y = pred)) + 
+  labs(y = "P(ozone foliar injury)", title = paste0("Predictions of ozone foliar injury at ", names(mods_byPark)[5] ,"\nfor a 'typical' plot and species"), 
+       subtitle = "95% parametric bootstrap confidence interval shown in grey")
+
+```
+
+Interpretive takeaways:     
+* There is a singular model fit -- likely because the site random intercept has no variance   
+* There is no variance in the random intercepts, and the model fit is generally poor (not enough data)    
+* There is a significant negative trend in ozone foliar injury across years (the 95% CI does NOT cross zero)
+
+:::
+
+::: {.callout-note collapse=true icon = false}
+#### Russell Cave National Monument
+Model summary: 
+```{r}
+summary(mods_byPark[[6]])
+```
+
+Is the fit singular? 
+```{r}
+isSingular(mods_byPark[[6]])
+```
+
+Look at patterns in simulated residuals
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+# use the DHARMa package to simulate residuals and and plot the results
+mods_byPark_i_resids <- DHARMa::simulateResiduals(mods_byPark[[6]],
+                                 response = TRUE, #for models with integer response
+                                 simulateREs = "conditional" # re-simulates both random and fixed effects
+                                 )
+plot(mods_byPark_i_resids)
+
+# plot residuals against year
+plotResiduals(mods_byPark_i_resids, form = ~year_s)
+
+# plot residuals against species
+plotResiduals(mods_byPark_i_resids, form= ~scientificName)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[6]], "includeSiteEffect"]) {
+# plot residuals against plot (if included in the model)
+plotResiduals(mods_byPark_i_resids, form= ~siteName)
+}
+
+# look at the dispersion of the model
+testDispersion(mods_byPark_i_resids, plot = TRUE)
+
+# look at the dispersion of the model according to species
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~scientificName), plot = TRUE)
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[6]], "includeSiteEffect"]) {
+# look at the dispersion of the model according to plot
+testDispersion(recalculateResiduals(mods_byPark_i_resids, group = ~siteName), plot = TRUE)
+}
+
+
+## what is the correlation between the random effect terms? what is the standard deviation?
+VarCorr(mods_byPark[[6]]) |> as.data.frame()
+```
+
+Are the random effects correlated with the predictor (year?) 
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+# the random effects from the model
+mods_byPark_i_ranEf <- ranef(mods_byPark[[6]])
+
+# is the species random effect correlated with the predictor?
+y <- aggregate(year_s ~ scientificName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[6],])
+
+plot(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year")
+abline(lm(mods_byPark_i_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),
+     x = 0.1,
+     y = 3)
+
+
+if(parkAndSite[parkAndSite$unitName == names(mods_byPark)[[6]], "includeSiteEffect"]) {
+# is the site random effect correlated with the predictor?
+y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datParkMod[datParkMod$unitName == names(mods_byPark)[6],])
+
+plot(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year")
+abline(lm(mods_byPark_i_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mods_byPark_i_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),
+     x = 0.35,
+     y = 2.5)
+}
+
+
+```
+
+Model coefficients and bootstrap confidence intervals
+```{r}
+## see if the confidence intervals have been saved yet 
+if(!sum(paste0("fixefCI_",stringr::str_remove_all(names(mods_byPark)[6], " "),".rds") %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+ fixefCI_temp <- bootMer(mods_byPark[[6]], FUN = function(x) fixef(x),
+              nsim = 100, use.u = FALSE, type = "parametric",
+              parallel = "multicore", ncpus = 4)
+
+fixefCI <- apply(fixefCI_temp$t, 2, quantile, c(0.025, 0.975), na.rm = TRUE)
+saveRDS(fixefCI, paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[6], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  fixefCI <- readRDS( paste0("../Data/intermediateDataFiles/models_byPark_CIs/fixefCI_", stringr::str_remove_all(names(mods_byPark)[6], " "),".rds"))
+}
+  
+
+sigCol <- c("yes" = "darkblue", "no" = "darkred")
+# plot the fixed effect coefficients
+ broom.mixed::tidy(mods_byPark[[6]], effects = "fixed", conf.int = TRUE)  |>
+   filter(effect == "fixed") |> 
+   select(-conf.low, -conf.high) |> 
+   left_join(data.frame("term" = c("(Intercept)", "year_s"), "conf.low" = c(fixefCI[,1]), 
+                        "conf.high" = fixefCI[,2])) |> 
+   #transform(term=sprintf("%s.%s", term)) |>
+   mutate(model = "mod2",
+          crossesZero = "no") |>
+   mutate(crossesZero = replace(crossesZero, conf.high > 0  & conf.low < 0, "yes")) |> 
+   ggplot() + 
+   geom_vline(aes(xintercept = 0), linetype = 2) + 
+   geom_point(aes(x = estimate, y = term, col = crossesZero)) + 
+   geom_segment(aes(y = term, x = conf.high, xend = conf.low, col = crossesZero)) + 
+   labs(title = "Fixed effect coefficients and bootstrap CIs from the model: \nfoliarInjury ~ year_s + (1|year_f) + (1|species) + (1|plot/park)", x = "Estimate", y = "Model Term") + 
+   scale_color_manual(name = "CI crosses zero?", values = sigCol)
+```
+
+Show population-level predictions 
+(These are unconditional predictions, which are predictions for a 'typical' plot/species) with parametric bootstrap confidence intervals
+```{r}
+# set up the prediction data.frame
+yr_mean <- mean(datAll_std$year)
+yr_sd <- sd(datAll_std$year)   # from the UNSCALED year variable from the data frame used to fit the model, so that the scaling factors are the same here as they were for creating the year_s variable used ot fit the model
+
+newDat <- data.frame(year = seq(min(datParkMod[datParkMod$unitName == names(mods_byPark)[6],]$year), max(datParkMod[datParkMod$unitName == names(mods_byPark)[6],]$year), length.out = 50))
+newDat$year_s <- (newDat$year - yr_mean) / yr_sd
+newDat$siteName       <- datParkMod[datParkMod$unitName == names(mods_byPark)[6],]$siteName[1]
+newDat$scientificName <- datParkMod[datParkMod$unitName == names(mods_byPark)[6],]$scientificName[1]
+newDat$year_f         <- datParkMod[datParkMod$unitName == names(mods_byPark)[6],]$year_f[1]
+# generate predictions (w/ all intercepts at their mean)
+newDat$pred <- predict(mods_byPark[[6]], newdata = newDat, re.form = NA, type = "response")
+
+# now, calculate CIs 
+predFun <- function(m) predict(m, newdata = newDat,re.form = NA, type = "response")
+
+# get 95% confidence interval 
+## see if the bootstrap confidence intervals have been saved yet 
+if(!sum(c(paste0("predBootCIs_", stringr::str_remove_all(names(mods_byPark)[6], " "),".rds")) %in% list.files("../Data/intermediateDataFiles/models_byPark_CIs/")) ) {
+
+    boot <-  bootMer(mods_byPark[[6]], predFun, nsim = 100)
+saveRDS(boot, paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[6], " "),".rds"))
+} else {
+  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  boot <- readRDS(paste0("../Data/intermediateDataFiles/models_byPark_CIs/predBootCIs_", stringr::str_remove_all(names(mods_byPark)[6], " "),".rds"))
+}
+
+newDat <- newDat |> 
+  cbind(confint(boot))
+
+#plot
+ggplot(newDat) + 
+  geom_ribbon(aes(x = year, ymin = `2.5 %`, ymax = `97.5 %`), fill = "grey80") +
+  geom_line(aes(x = year, y = pred)) + 
+  labs(y = "P(ozone foliar injury)", title = paste0("Predictions of ozone foliar injury at ", names(mods_byPark)[6] ,"\nfor a 'typical' plot and species"), 
+       subtitle = "95% parametric bootstrap confidence interval shown in grey")
+
+```
+
+Interpretive takeaways:     
+* Bootstrap CIs struggle, as a large proportion of the bootstrapped models are singular or don't converge   
+* There is a singular model fit -- likely because the site random intercept has no variance   
+* There is a significant negative trend in ozone foliar injury across years (the 95% CI does NOT cross zero)
+
+:::
+
+
+
+## Question 3:  Is the rate of ozone foliar injury across all CUPN parks related to the ozone exposure index for vegetation?
+
+### Considerations for this model
+* Fitting a model like this across all parks does decrease our ability to estimate relationships at each individual park, since the variation in the effect of year across parks is pooled and estimates for the year effect at each park are drawn toward the global mean estimate. However, with so many parks that do not have enough data to fit a model on their own, this approach allows us to at least do an exploratory analysis with all of the available data. 
+* The response variable is presence or absence of ozone foliar injury (there isn't very much variation in severity of foliar injury -- the data are very zero inflated-- so we may need to use another structure for that model)
+* The predictor variable in this model is the ozone exposure index for vegetation. There are some parks that have on-site annual measurements of the ozone index, but other parks in the network do not have on-site sensors. Instead, ozone exposure indices for these parks are generated via interpolation between nearby sensors, and instead of annual measurements of ozone exposure index, the index reported for these sites is the average of the interpolated index over the previous five years (inclusive of the current year). So that we're using the same predictor variable for all parks in this model, we use the 5-year average ozone index for all sites. We calculated this average for sites that have yearly indices. Note that there are a few cases where the 5-year average is not available for years early in the monitoring period, so in those cases we use yearly values when available. We cannot use both year and ozone index as predictor variables since they are correlated (r ~ -0.7).
+* We will use a binomial generalized linear mixed model, which is suitable for a binary response variable
+* We will fit the model across all of the parks in order to maximize the amount of data available, and because we're interested in the trend across all CUPN parks.
+* Because the data are not independent (plots are visited repeatedly, and the park unit determines the years when plots are visited), we'll use *a random intercept for plot nested within park*. 
+* We include a *random intercept for year as a factor (year_f)* to account for year to year variation. Note that this is calculated as as.factor(scaled year variable).
+* We also expect that occurrence of foliar injury is different for different species due to differences in susceptibility. We also think that the trend in foliar injury is likely different across species. To help account for this, we include a *random intercept for species*
+* I don't think the observations are temporally autocorrelated, because the presence of foliar injury in a previous year does not affect the presence of foliar injury in a subsequent year (leaves re-grow annually).
+* The fact that plots aren't sampled every year in most parks is likely not problematic, since the presence/absence of data in a given year isn't related to ozone or other drivers (i.e. the data aren't "Missing Not at Random")
+* This analysis makes the assumption that parks are assigned to panels randomly, and not using some other variable that may be confounding with ozone quantity or one of the predictors in the models.
+
+```{r}
+# prepare data 
+# get 5-year average ozone data, but get yearly values when 5-year average aren't available (happens for early years at some sites)
+ozoneDat_mod <- ozoneDat |> 
+  #filter(unitCode == "MACA") |> 
+  pivot_wider(id_cols = c(unitName, unitCode, year, ozoneExposureIndexUnits),
+              values_from = ozoneExposureIndexForVegetation, 
+              names_from = ozoneExposureIndexType) |> 
+  mutate(ozoneIndex_mod = `average of previous 5 years inclusive of current year`) 
+
+ozoneDat_mod[is.na(ozoneDat_mod$ozoneIndex_mod), "ozoneIndex_mod"] <- ozoneDat_mod[is.na(ozoneDat_mod$ozoneIndex_mod), "yearly"] 
+
+datAll_std <- datAll_std |> 
+  left_join(ozoneDat_mod |> select(-yearly, -`average of previous 5 years inclusive of current year`), by = c("unitName","unitCode", "year")) |> 
+  filter(!is.na(ozoneIndex_mod))
+```
+```{r}
+#| echo: FALSE
+## is there a correlation between year and ozone? 
+plot(datAll_std$year, datAll_std$ozoneIndex_mod) 
+abline(lm(datAll_std$ozoneIndex_mod ~ datAll_std$year), col = "red")
+print(paste0("The correlation between year and ozone vegetation index is ",round(cor(c(datAll_std$year) |> na.omit(), c(datAll_std$ozoneIndex_mod) |> na.omit()), 4)))
+```
+
+### Fit a generalized linear mixed model with a random effect for plot name and a random effect for species.
+<!-- However, a model with the full dataset does not converge, likely because there are quite a few species for which there are only a few observations. In this model, we've removed species for which we have fewer than 20 observations -->
+```{r}
+# random effect for site and random effect for species (there is variation in the starting amount of foliar injury, and the change in rate of foliar injury over time is different for each species at each site )
+# try setting REML to "true" ()
+mod3 <- glmer(data = datAll_std, formula = confirmedOzoneInjury ~ ozoneIndex_mod  + (1|year_f)
+              + (1|scientificName) + (1|unitName) + (1|unitName:siteName), family = binomial(link = "logit"), control=glmerControl(optimizer="bobyqa"))
+
+summary(mod3)
+
+```
+
+### Look at patterns in simulated residuals
+(we use conditional residuals, which allow us to look at patterns in the random effects. We already know that the random effect variables are driving patterns in the response (why we include them as random effects in the first place) so we expect to see patterns in the unconditional/marginal residuals)
+We use the DHARMa R package to simulate scaled residuals ("a scaled residual value of 0.5 means that half of the simulated data are higher than the observed rate, half of them lower." -- from the DHARMa vignette). A well specified model will have scaled residuals with a uniform (flat) distribution, and will not show a directional relationship when plotted against model predictors.
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+# use the DHARMa package to simulate residuals and and plot the results
+mod1_resids <- DHARMa::simulateResiduals(mod1,
+                                 response = TRUE, #for models with integer response
+                                 simulateREs = "conditional" # re-simulates both random and fixed effects
+                                 )
+plot(mod1_resids)
+
+# plot residuals against year
+plotResiduals(mod1_resids, form = ~year_s)
+
+# plot residuals against year as a factor
+plotResiduals(mod1_resids, form = ~year_f)
+
+# plot residuals against species
+plotResiduals(mod1_resids, form= ~scientificName)
+# plot residuals against plot
+plotResiduals(mod1_resids, form= ~siteName, )
+# plot residuals against park
+plotResiduals(mod1_resids, form= ~unitName)
+
+# look at the dispersion of the model
+testDispersion(mod1_resids, plot = TRUE)
+
+# look at the dispersion of the model according to species
+testDispersion(recalculateResiduals(mod1_resids, group = ~scientificName), plot = TRUE)
+
+# look at the dispersion of the model according to plot
+testDispersion(recalculateResiduals(mod1_resids, group = ~siteName), plot = TRUE)
+
+# look at the dispersion of the model according to park
+testDispersion(recalculateResiduals(mod1_resids, group = ~unitName), plot = TRUE)
+
+## what is the correlation between the random effect terms? what is the standard deviation?
+VarCorr(mod1) |> as.data.frame()
+```
+
+There is a slightly significant KS test, which indicates that the data are perhaps not an ideal fit to the statistical distribution used in the model. The residuals do not have a significant pattern of variation across year, but there is some significant variation across park. However, the model does not appear to be over-dispersed.
+The standard deviations of the random effects aren't too close to zero, so the data are currently supporting the random effect.
+
+### Are the random effects correlated with the predictor (year?) 
+A correlation would indicate that the random effects are absorbing some of the effects of the fixed effect structure, which would indicate that the fixed effect structure was poorly specified. 
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+# the random effects from the model
+mod1_ranEf <- ranef(mod1)
+
+# is the species random effect correlated with the predictor?
+y <- aggregate(year_s ~ scientificName, FUN = mean, data = datAll_std)
+
+plot(mod1_ranEf$scientificName$`(Intercept)` ~ y$year_s, xlab = "mean value of year (scaled) for each level of the species random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of species random effect with year")
+abline(lm(mod1_ranEf$scientificName$`(Intercept)` ~ y$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mod1_ranEf$scientificName$`(Intercept)`, y = y$year_s), 4)),
+     x = 0.8,
+     y = 3)
+
+
+# is the site random effect correlated with the predictor?
+y2 <- aggregate(year_s ~ siteName, FUN = mean, data = datAll_std)
+
+plot(mod1_ranEf$siteName$`(Intercept)` ~ y2$year_s, xlab = "mean value of year (scaled) for each level of the site random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of site random effect with year")
+abline(lm(mod1_ranEf$siteName$`(Intercept)` ~ y2$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mod1_ranEf$siteName$`(Intercept)`, y = y2$year_s), 4)),
+     x = 0.35,
+     y = 2.5)
+
+# is the park random effect correlated with the predictor?
+y3 <- aggregate(year_s ~ unitName, FUN = mean, data = datAll_std)
+
+plot(mod1_ranEf$unitName$`(Intercept)` ~ y3$year_s, xlab = "mean value of year (scaled) for each level of the park random effect", ylab = "ran. intercept for each level of the site ran. eff.",  main = "Correlation of park random effect with year")
+abline(lm(mod1_ranEf$unitName$`(Intercept)` ~ y3$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mod1_ranEf$unitName$`(Intercept)`, y = y3$year_s), 4)),
+     x = 0.35,
+     y = 0.5)
+
+# is the factor(year) random effect correlated with the predictor?
+y4 <- aggregate(year_s ~ year_f, FUN = mean, data = datAll_std)
+
+plot(mod1_ranEf$year_f$`(Intercept)` ~ y4$year_s, xlab = "mean value of year (scaled) for each level of the factor(year) random effect", ylab = "ran. intercept for each level of the species ran. eff.", main =  "Correlation of factor(year) random effect with year")
+abline(lm(mod1_ranEf$year_f$`(Intercept)` ~ y4$year_s), col = "red")
+text(paste0("corr=",round(cor(x = mod1_ranEf$year_f$`(Intercept)`, y = y4$year_s), 4)),
+     x = 0.8,
+     y = 3)
+
+
+```
+There are weak correlations between the random effects and year (scaled), but they are weak enough I think to not be problematic.
+
+### Model coefficients and confidence intervals
+We show bootstrap percentile confidence intervals for fixed effects, which are calculated using the lme4::confint() function
+```{r}
+mod_df <- broom.mixed::tidy(mod1) |>
+  dplyr::filter(effect == 'fixed') |>
+      dplyr::select(term, estimate) |> data.frame()
+
+new_df <- data.frame("year_s" = sort(unique(mod1@frame$year_s)))
+pred_df <- data.frame(term = paste0(substr("year_s", 1, 1), new_df[,"year_s"], "_response"),
+                          estimate = stats::predict(mod1, newdata = new_df,
+                                                    type = 'response', re.form = NA))
+
+## see if the confidence intervals have been saved yet 
+if(!sum(c("fixefCI.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) ) {
+  fixefCI_temp <- bootMer(mod1, FUN = function(x) fixef(x),
+              nsim = 100, use.u = FALSE, type = "parametric",
+              parallel = "multicore", ncpus = 4)
+
+fixefCI <- apply(fixefCI_temp$t, 2, quantile, c(0.025, 0.975), na.rm = TRUE)
+
+saveRDS(fixefCI, "../Data/intermediateDataFiles/model1_CIs/fixefCI.rds")
+} else {
+  #mod1CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  fixefCI <- readRDS("../Data/intermediateDataFiles/model1_CIs/fixefCI.rds")
+}
+  
+
+sigCol <- c("yes" = "darkblue", "no" = "darkred")
+# plot the fixed effect coefficients
+ broom.mixed::tidy(mod1, effects = "fixed", conf.int = TRUE)  |>
+   filter(effect == "fixed") |> 
+   select(-conf.low, -conf.high) |> 
+   left_join(data.frame("term" = c("(Intercept)", "year_s"), "conf.low" = c(fixefCI[,1]), 
+                        "conf.high" = fixefCI[,2])) |> 
+   #transform(term=sprintf("%s.%s", term)) |>
+   mutate(model = "mod1",
+          crossesZero = "no") |>
+   mutate(crossesZero = replace(crossesZero, conf.high > 0  & conf.low < 0, "yes")) |> 
+   ggplot() + 
+   geom_vline(aes(xintercept = 0), linetype = 2) + 
+   geom_point(aes(x = estimate, y = term, col = crossesZero)) + 
+   geom_segment(aes(y = term, x = conf.high, xend = conf.low, col = crossesZero)) + 
+   labs(title = "Fixed effect coefficients and bootstrap CIs from the model: \nfoliarInjury ~ year_s + (1|year_f) + (1|species) + (1|plot/park)", x = "Estimate", y = "Model Term")+ 
+   scale_color_manual(name = "CI crosses zero?", values = sigCol)
 ```
 ### Show population-level predictions 
 (These are unconditional predictions, which are predictions for a 'typical' park/plot/species) with parametric bootstrap confidence intervals
@@ -1876,19 +2912,19 @@ newDat <- data.frame(year = seq(min(datAll_std$year), max(datAll_std$year), leng
 newDat$year_s <- (newDat$year - yr_mean) / yr_sd
 
 # generate predictions (w/ all intercepts at their mean)
-newDat$pred <- predict(mod2, newdata = newDat, re.form = NA, type = "response")
+newDat$pred <- predict(mod1, newdata = newDat, re.form = NA, type = "response")
 
 # now, calculate CIs 
 predFun <- function(m) predict(m, newdata = newDat,type = "response")
 
 # get 95% confidence interval 
 ## see if the bootstrap confidence intervals have been saved yet 
-if(sum(c("predBootCIs.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) == 0) {
+if(!sum(c("predBootCIs.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) ) {
 
-    boot <-  bootMer(mod2, predFun, nsim = 100, re.form = NA)
+    boot <-  bootMer(mod1, predFun, nsim = 100, re.form = NA)
 saveRDS(boot, "../Data/intermediateDataFiles/model1_CIs/predBootCIs.rds")
 } else {
-  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  #mod1CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
   boot <- readRDS("../Data/intermediateDataFiles/model1_CIs/predBootCIs.rds")
 }
 
@@ -1925,19 +2961,19 @@ newDat2$scientificName <- datAll_std$scientificName[1]
 newDat2$year_f         <- datAll_std$year_f[1]
 
 # generate predictions (w/ all intercepts at their mean)
-newDat2$pred <- predict(mod2, newdata = newDat2, re.form = ~(1|unitName), type = "response")
+newDat2$pred <- predict(mod1, newdata = newDat2, re.form = ~(1|unitName), type = "response")
 
 # now, calculate CIs 
 predFun2 <- function(m) predict(m, newdata = newDat2, type = "response", allow.new.levels = TRUE,)
 
 # get 95% confidence interval 
 ## see if the bootstrap confidence intervals have been saved yet 
-if(sum(c("predBootCIs_perPark.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) == 0) {
+if(!sum(c("predBootCIs_perPark.rds") %in% list.files("../Data/intermediateDataFiles/model1_CIs/")) ) {
 
-    boot_perPark <-  bootMer(mod2, predFun2, nsim = 100, re.form = ~(1|unitName), use.u = TRUE)
+    boot_perPark <-  bootMer(mod1, predFun2, nsim = 100, re.form = ~(1|unitName), use.u = TRUE)
 saveRDS(boot_perPark, "../Data/intermediateDataFiles/model1_CIs/predBootCIs_perPark.rds")
 } else {
-  #mod2CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
+  #mod1CI_year_s <- readRDS("../Data/intermediateDataFiles/model1_CIs/year_s_CI.rds")
   boot_perPark <- readRDS("../Data/intermediateDataFiles/model1_CIs/predBootCIs_perPark.rds")
 }
 
@@ -1955,3 +2991,6 @@ ggplot(newDat2) +
 
 ```
 
+### Interpretive takeaways
+* When looking across all parks collectively, there is a negative trend in the presence of confirmed ozone foliar injury across the study period, but the effect is NOT significant (the CI of the year estimate crosses zero). 
+* There are different degrees of decrease (i.e. the y-intercept of the trend is different) in the presence of confirmed ozone foliar injury when we look at the park-level effects, although these effects are shrunken toward the mean effect across all parks due to the model structure. The data could not support a model with a random intercept for year, which would have allowed for different *rates* of change across parks rather than just different intercepts for the trend across parks. 
